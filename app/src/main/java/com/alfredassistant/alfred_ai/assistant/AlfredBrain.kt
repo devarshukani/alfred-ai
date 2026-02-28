@@ -1,8 +1,8 @@
 package com.alfredassistant.alfred_ai.assistant
 
 /**
- * Simple local response generator for Alfred.
- * Replace this with an actual AI API (OpenAI, Gemini, etc.) for real intelligence.
+ * Alfred's brain — responds like Batman's loyal butler.
+ * Replace with a real AI API for actual intelligence.
  */
 object AlfredBrain {
 
@@ -10,31 +10,37 @@ object AlfredBrain {
         val lower = input.lowercase()
         return when {
             lower.contains("hello") || lower.contains("hi") || lower.contains("hey") ->
-                "Hello! I'm Alfred, your AI assistant. How can I help you?"
+                "Good day, sir. Alfred at your service. How may I assist you?"
 
             lower.contains("your name") || lower.contains("who are you") ->
-                "I'm Alfred, your personal AI assistant. I'm here to help with whatever you need."
+                "I am Alfred, sir. Your personal assistant, always at the ready."
 
             lower.contains("time") ->
-                "The current time is ${java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())}."
+                "The time is ${java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault()).format(java.util.Date())}, sir."
 
             lower.contains("date") || lower.contains("today") ->
-                "Today is ${java.text.SimpleDateFormat("EEEE, MMMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())}."
+                "Today is ${java.text.SimpleDateFormat("EEEE, MMMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date())}, sir."
 
             lower.contains("weather") ->
-                "I don't have access to weather data yet, but that feature is coming soon."
+                "I'm afraid I don't have access to weather data at the moment, sir. That capability is forthcoming."
 
             lower.contains("thank") ->
-                "You're welcome! Anything else I can help with?"
+                "It is my pleasure, sir. Will there be anything else?"
 
             lower.contains("bye") || lower.contains("goodbye") ->
-                "Goodbye! Have a great day."
+                "Very well, sir. I shall be here when you need me."
 
             lower.contains("joke") ->
-                "Why do programmers prefer dark mode? Because light attracts bugs."
+                "Why do programmers prefer dark mode? Because light attracts bugs, sir. My sincerest apologies for the humor."
+
+            lower.contains("batman") ->
+                "I'm sure I don't know what you're referring to, sir. I am merely a humble assistant."
+
+            lower.contains("help") ->
+                "Of course, sir. I can assist with the time, date, and general inquiries. Simply speak your command."
 
             else ->
-                "I heard you say: \"$input\". I'm still learning, but I'll get smarter over time."
+                "I heard: \"$input\". I shall endeavor to be more helpful as my capabilities expand, sir."
         }
     }
 }
