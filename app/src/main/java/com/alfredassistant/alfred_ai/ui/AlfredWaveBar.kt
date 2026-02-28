@@ -117,16 +117,16 @@ fun AlfredWaveBar(
 
     // Breathing
     val pulse1 by inf.animateFloat(
-        0.7f, 1.0f, infiniteRepeatable(tween(2000, easing = EaseInOut), RepeatMode.Reverse), "p1"
+        0.55f, 1.0f, infiniteRepeatable(tween(1600, easing = EaseInOut), RepeatMode.Reverse), "p1"
     )
     val pulse2 by inf.animateFloat(
-        0.75f, 1.0f, infiniteRepeatable(tween(1700, easing = EaseInOut), RepeatMode.Reverse), "p2"
+        0.60f, 1.0f, infiniteRepeatable(tween(1400, easing = EaseInOut), RepeatMode.Reverse), "p2"
     )
     val pulse3 by inf.animateFloat(
-        0.65f, 1.0f, infiniteRepeatable(tween(2300, easing = EaseInOut), RepeatMode.Reverse), "p3"
+        0.50f, 1.0f, infiniteRepeatable(tween(1800, easing = EaseInOut), RepeatMode.Reverse), "p3"
     )
     val whitePulse by inf.animateFloat(
-        0.88f, 1.0f, infiniteRepeatable(tween(1300, easing = EaseInOut), RepeatMode.Reverse), "wp"
+        0.80f, 1.0f, infiniteRepeatable(tween(1000, easing = EaseInOut), RepeatMode.Reverse), "wp"
     )
 
     // ---- Smooth state transitions ----
@@ -134,39 +134,39 @@ fun AlfredWaveBar(
     val ctw = tween<Color>(TRANSITION_MS, easing = EaseInOut)
 
     val aBase by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.80f; AssistantState.LISTENING -> 0.90f
-        AssistantState.PROCESSING -> 0.85f; AssistantState.SPEAKING -> 1.0f
-        AssistantState.AWAITING_CONFIRMATION -> 0.82f
+        AssistantState.IDLE -> 0.85f; AssistantState.LISTENING -> 0.95f
+        AssistantState.PROCESSING -> 0.90f; AssistantState.SPEAKING -> 1.0f
+        AssistantState.AWAITING_CONFIRMATION -> 0.87f
     }, tw, label = "aB")
 
     val aLayerAlpha by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.15f; AssistantState.LISTENING -> 0.35f
-        AssistantState.PROCESSING -> 0.28f; AssistantState.SPEAKING -> 0.45f
-        AssistantState.AWAITING_CONFIRMATION -> 0.20f
+        AssistantState.IDLE -> 0.22f; AssistantState.LISTENING -> 0.45f
+        AssistantState.PROCESSING -> 0.36f; AssistantState.SPEAKING -> 0.55f
+        AssistantState.AWAITING_CONFIRMATION -> 0.28f
     }, tw, label = "aLA")
 
     val aReach by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.40f; AssistantState.LISTENING -> 0.60f
-        AssistantState.PROCESSING -> 0.50f; AssistantState.SPEAKING -> 0.75f
-        AssistantState.AWAITING_CONFIRMATION -> 0.45f
+        AssistantState.IDLE -> 0.35f; AssistantState.LISTENING -> 0.55f
+        AssistantState.PROCESSING -> 0.48f; AssistantState.SPEAKING -> 0.95f
+        AssistantState.AWAITING_CONFIRMATION -> 0.42f
     }, tw, label = "aR")
 
     val aGlowR by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.14f; AssistantState.LISTENING -> 0.18f
-        AssistantState.PROCESSING -> 0.16f; AssistantState.SPEAKING -> 0.22f
-        AssistantState.AWAITING_CONFIRMATION -> 0.15f
+        AssistantState.IDLE -> 0.15f; AssistantState.LISTENING -> 0.21f
+        AssistantState.PROCESSING -> 0.18f; AssistantState.SPEAKING -> 0.34f
+        AssistantState.AWAITING_CONFIRMATION -> 0.17f
     }, tw, label = "aGR")
 
     val aDrift by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.05f; AssistantState.LISTENING -> 0.09f
-        AssistantState.PROCESSING -> 0.10f; AssistantState.SPEAKING -> 0.13f
-        AssistantState.AWAITING_CONFIRMATION -> 0.04f
+        AssistantState.IDLE -> 0.06f; AssistantState.LISTENING -> 0.11f
+        AssistantState.PROCESSING -> 0.12f; AssistantState.SPEAKING -> 0.22f
+        AssistantState.AWAITING_CONFIRMATION -> 0.05f
     }, tw, label = "aDf")
 
     val aGlowAlpha by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.15f; AssistantState.LISTENING -> 0.35f
-        AssistantState.PROCESSING -> 0.25f; AssistantState.SPEAKING -> 0.45f
-        AssistantState.AWAITING_CONFIRMATION -> 0.18f
+        AssistantState.IDLE -> 0.20f; AssistantState.LISTENING -> 0.40f
+        AssistantState.PROCESSING -> 0.30f; AssistantState.SPEAKING -> 0.65f
+        AssistantState.AWAITING_CONFIRMATION -> 0.23f
     }, tw, label = "aGA")
 
     // Colors
@@ -191,9 +191,9 @@ fun AlfredWaveBar(
     val glowXs = listOf(0.10f, 0.30f, 0.50f, 0.70f, 0.90f)
 
     // Audio reactivity multipliers
-    val audioBoost = 1f + smoothAudio * 0.5f       // size boost
-    val audioAlphaBoost = 1f + smoothAudio * 0.3f   // brightness boost
-    val audioReachBoost = 1f + smoothAudio * 0.25f   // height boost
+    val audioBoost = 1f + smoothAudio * 0.75f       // size boost
+    val audioAlphaBoost = 1f + smoothAudio * 0.5f   // brightness boost
+    val audioReachBoost = 1f + smoothAudio * 0.4f    // height boost
 
     Canvas(
         modifier = modifier
@@ -229,8 +229,8 @@ fun AlfredWaveBar(
             val phase = hShifts[i] * 2f * PI.toFloat()
             val cx = 0.5f + sin(phase.toDouble()).toFloat() * 0.35f
             // Limit reach so bands stay in bottom portion
-            val layerReach = (aReach * (0.5f + i * 0.08f) * audioReachBoost).coerceAtMost(0.55f)
-            val fadeStart = (1f - layerReach).coerceAtLeast(0.45f)
+            val layerReach = (aReach * (0.5f + i * 0.08f) * audioReachBoost).coerceAtMost(0.85f)
+            val fadeStart = (1f - layerReach).coerceAtLeast(0.15f)
             val alpha = aLayerAlpha * pulseList[i] * audioAlphaBoost
             val col = colors[i].copy(alpha = alpha.coerceAtMost(1f))
 
@@ -252,8 +252,8 @@ fun AlfredWaveBar(
             val p = pulseList[i]
 
             val xc = glowXs[i] * w + sin(d.toDouble()).toFloat() * w * aDrift
-            // Push glows to bottom 30% of canvas, slight vertical drift
-            val yc = h * 0.82f + cos(d.toDouble()).toFloat() * h * 0.06f
+            // Push glows toward bottom, but allow them to rise during SPEAKING
+            val yc = h * (0.75f - aReach * 0.15f) + cos(d.toDouble()).toFloat() * h * 0.08f
             val r = w * aGlowR * p * audioBoost
             val center = Offset(xc, yc)
 
