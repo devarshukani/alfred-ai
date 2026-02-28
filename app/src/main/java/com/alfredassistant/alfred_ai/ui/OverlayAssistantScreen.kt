@@ -13,7 +13,9 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun OverlayAssistantScreen(
     state: AssistantState,
+    confirmation: ConfirmationRequest?,
     onMicTap: () -> Unit,
+    onOptionSelected: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -29,10 +31,22 @@ fun OverlayAssistantScreen(
             },
         contentAlignment = Alignment.BottomCenter
     ) {
-        AlfredOrb(
-            state = state,
-            onClick = onMicTap,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(bottom = 60.dp)
-        )
+        ) {
+            // Confirmation/options box appears above the orb
+            ConfirmationBox(
+                confirmation = confirmation,
+                onOptionSelected = onOptionSelected,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            // The orb
+            AlfredOrb(
+                state = state,
+                onClick = onMicTap
+            )
+        }
     }
 }

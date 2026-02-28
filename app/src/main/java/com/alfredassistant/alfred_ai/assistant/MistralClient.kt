@@ -33,8 +33,27 @@ You are helpful, concise, and always composed. Keep responses brief and suitable
 no more than 2-3 sentences unless the user asks for detail. Never use markdown, bullet points, 
 or formatting — speak naturally as if talking aloud.
 
+IMPORTANT — CONFIRMATION RULE:
+You have a tool called present_options. You MUST use it to confirm with the user BEFORE executing any action that is irreversible or significant. The user sees clickable buttons and can also speak their choice. Max 4 options. Always include a "Cancel" option.
+
+Use present_options in these situations:
+1. PHONE CALLS: Before calling, show options like ["Call Mobile: +1234", "Call Work: +5678", "Cancel"]. If only one number, still confirm: ["Call John at +1234", "Cancel"].
+2. CALENDAR EVENTS: Before creating an event, summarize it and confirm: ["Create event", "Change time", "Cancel"]. 
+3. EMAIL: Before composing, confirm recipient and subject: ["Send to john@email.com", "Change recipient", "Cancel"].
+4. PAYMENTS: Before initiating any payment or launching a payment app, confirm: ["Pay ₹500 via GPay", "Change amount", "Cancel"]. For UPI payments always confirm amount and recipient.
+5. MULTIPLE CONTACTS: When search returns multiple contacts, show them as options: ["John Smith", "John Doe", "Cancel"].
+6. AMBIGUOUS REQUESTS: When the user's intent is unclear between 2-4 interpretations, present the options.
+7. ALARMS: For recurring alarms or unusual times, confirm: ["Set alarm for 5:30 AM weekdays", "Change time", "Cancel"].
+
+Do NOT use present_options for:
+- Simple information queries (weather, web search, notifications, calculator)
+- Opening apps or settings
+- Reading calendar/events
+- Memory operations
+- Timers and stopwatch
+
 You have access to tools for:
-- Phone: search contacts, make calls, dial numbers. When multiple numbers exist, ask which one.
+- Phone: search contacts, make calls, dial numbers.
 - Alarms: set alarms (one-time or recurring with days), dismiss, snooze, show all alarms.
   For days parameter use: Sunday=1, Monday=2, Tuesday=3, Wednesday=4, Thursday=5, Friday=6, Saturday=7.
   For recurring alarms like "weekdays", pass [2,3,4,5,6]. For "weekends", pass [1,7].
@@ -42,13 +61,12 @@ You have access to tools for:
 - Stopwatch: start the stopwatch.
 - Calculator: evaluate math expressions and convert units.
 - Calendar: create events, check today/tomorrow/week schedule, open calendar.
-  For dates, use format "YYYY-MM-DD HH:mm". Always confirm event details before creating.
+  For dates, use format "YYYY-MM-DD HH:mm".
 - Mail: compose emails (with to, subject, body, optional cc/bcc), open mail app.
-  When composing, confirm the recipient and content with the user before sending.
   If the user doesn't provide an email address, search their contacts first to find it.
 - Device Search: find and launch apps, search contacts, open specific system settings.
 - Web Search: search the web for information and summarize results, open URLs, open browser search.
-  Use web_search to get information, then summarize it naturally for voice. If results are insufficient, use open_web_search to open the browser.
+  Use web_search to get information, then summarize it naturally for voice.
 - Weather: get current weather and 3-day forecast for any city. Summarize naturally.
 - Payments: launch payment apps (GPay, PhonePe, Paytm, PayPal, etc.), initiate UPI payments, list available payment apps.
 - Notifications: read recent notifications, filter by app, clear notifications. If listener not enabled, guide user to enable it.
@@ -134,7 +152,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
             put("model", MODEL)
             put("messages", messages)
             put("temperature", 0.7)
-            put("max_tokens", 256)
+            put("max_tokens", 512)
             put("tools", tools)
             put("tool_choice", "auto")
         }
@@ -954,6 +972,31 @@ Today's date is provided in the conversation — use it to calculate correct dat
                         })
                     })
                     put("required", JSONArray().apply { put("key"); put("value") })
+                })
+            })
+        })
+
+        // --- Options / Confirmation ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "present_options")
+                put("description", "Present clickable options to the user when a choice or confirmation is needed BEFORE executing an action. MUST be used before: making phone calls, creating calendar events, composing emails, initiating payments, and when multiple contacts match. Max 4 options. Always include a Cancel option. The user will tap or speak their choice.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("prompt", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The question or prompt to display above the options")
+                        })
+                        put("options", JSONObject().apply {
+                            put("type", "array")
+                            put("items", JSONObject().apply { put("type", "string") })
+                            put("description", "List of option labels (max 4). Keep them short and clear.")
+                            put("maxItems", 4)
+                        })
+                    })
+                    put("required", JSONArray().apply { put("prompt"); put("options") })
                 })
             })
         })

@@ -12,6 +12,8 @@ import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
 import com.alfredassistant.alfred_ai.features.search.SearchAction
 import com.alfredassistant.alfred_ai.features.weather.WeatherAction
+import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import kotlinx.coroutines.CompletableDeferred
 
 class AlfredBrain(context: Context) {
 
@@ -27,13 +29,26 @@ class AlfredBrain(context: Context) {
     private val notificationAction = NotificationAction(context)
     private val memoryStore = MemoryStore(context)
 
+    // Callback for when AI wants to show options to the user
+    var onConfirmationNeeded: ((ConfirmationRequest) -> Unit)? = null
+
+    // Deferred that gets completed when user picks an option
+    private var pendingSelection: CompletableDeferred<String>? = null
+
+    /**
+     * Called from the UI when user taps or speaks an option.
+     */
+    fun submitOptionSelection(selectedOption: String) {
+        pendingSelection?.complete(selectedOption)
+    }
+
     suspend fun processInput(userSpeech: String): String {
         // Inject memory context into system prompt
         mistral.setMemoryContext(memoryStore.getMemoryContext())
 
         var result = mistral.chat(userSpeech)
 
-        var maxIterations = 8
+        var maxIterations = 12
         while (result.toolCalls.isNotEmpty() && maxIterations > 0) {
             maxIterations--
             val toolResults = result.toolCalls.map { call ->
@@ -182,6 +197,27 @@ class AlfredBrain(context: Context) {
                 "get_all_memories" -> memoryStore.getAllFacts() + "\n" + memoryStore.getAllPreferences()
                 "forget_fact" -> memoryStore.forgetFact(call.arguments.getString("key"))
                 "set_preference" -> memoryStore.setPreference(call.arguments.getString("key"), call.arguments.getString("value"))
+
+                // --- Options / Confirmation ---
+                "present_options" -> {
+                    val prompt = call.arguments.getString("prompt")
+                    val optionsArr = call.arguments.getJSONArray("options")
+                    val options = mutableListOf<String>()
+                    for (i in 0 until minOf(optionsArr.length(), 4)) {
+                        options.add(optionsArr.getString(i))
+                    }
+                    // Show options to user and suspend until they pick one
+                    val deferred = CompletableDeferred<String>()
+                    pendingSelection = deferred
+                    onConfirmationNeeded?.invoke(ConfirmationRequest(prompt, options))
+                    val selection = deferred.await()
+                    pendingSelection = null
+                    if (selection.equals("Cancel", ignoreCase = true)) {
+                        "User cancelled the action."
+                    } else {
+                        "User selected: $selection"
+                    }
+                }
 
                 else -> "Unknown function: ${call.functionName}"
             }

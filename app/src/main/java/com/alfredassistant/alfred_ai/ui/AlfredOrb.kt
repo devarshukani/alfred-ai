@@ -264,6 +264,31 @@ fun AlfredOrb(
                     // Core
                     drawCircle(brush = coreGradient, radius = r, center = center)
                 }
+
+                AssistantState.AWAITING_CONFIRMATION -> {
+                    val r = baseR * idleBreath
+                    // Gentle pulsing glow — waiting state
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            listOf(AlfredAmber.copy(alpha = idleGlow * 1.5f), Color.Transparent),
+                            center = center, radius = r * 2.5f
+                        ),
+                        radius = r * 2.5f, center = center
+                    )
+                    // Dashed-style double ring
+                    drawCircle(
+                        color = AlfredAmber.copy(alpha = 0.3f),
+                        radius = r * 1.6f, center = center,
+                        style = Stroke(width = 1.dp.toPx())
+                    )
+                    drawCircle(
+                        color = AlfredGold.copy(alpha = 0.2f),
+                        radius = r * 1.35f, center = center,
+                        style = Stroke(width = 0.8.dp.toPx())
+                    )
+                    // Core
+                    drawCircle(brush = coreGradient, radius = r, center = center)
+                }
             }
         }
     }
