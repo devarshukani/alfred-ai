@@ -4,6 +4,7 @@ import android.content.Context
 import com.alfredassistant.alfred_ai.features.alarm.AlarmAction
 import com.alfredassistant.alfred_ai.features.calculator.CalculatorAction
 import com.alfredassistant.alfred_ai.features.calendar.CalendarAction
+import com.alfredassistant.alfred_ai.features.mail.MailAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
 
@@ -17,6 +18,7 @@ class AlfredBrain(context: Context) {
     private val alarmAction = AlarmAction(context)
     private val calculatorAction = CalculatorAction()
     private val calendarAction = CalendarAction(context)
+    private val mailAction = MailAction(context)
 
     suspend fun processInput(userSpeech: String): String {
         var result = mistral.chat(userSpeech)
@@ -151,6 +153,27 @@ class AlfredBrain(context: Context) {
                 "open_calendar" -> {
                     calendarAction.openCalendar()
                     "Calendar opened."
+                }
+
+                // --- Mail ---
+                "compose_email" -> {
+                    val to = call.arguments.getString("to")
+                    val subject = call.arguments.getString("subject")
+                    val body = call.arguments.getString("body")
+                    val cc = call.arguments.optString("cc", null)
+                    val bcc = call.arguments.optString("bcc", null)
+                    mailAction.composeEmail(to, subject, body, cc, bcc)
+                    "Email composed to $to. Please review and send."
+                }
+                "open_mail" -> {
+                    mailAction.openMail()
+                    "Mail app opened."
+                }
+                "share_via_email" -> {
+                    val subject = call.arguments.getString("subject")
+                    val body = call.arguments.getString("body")
+                    mailAction.shareViaEmail(subject, body)
+                    "Share sheet opened."
                 }
 
                 else -> "Unknown function: ${call.functionName}"

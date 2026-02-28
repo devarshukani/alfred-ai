@@ -18,7 +18,7 @@
 - [x] Conversation memory (multi-turn within session, last 20 exchanges)
 - [x] System prompt: Alfred butler persona
 
-## Phase 2 — Function Calling & Device Actions (In Progress)
+## Phase 2 — Function Calling & Device Actions ✅
 - [x] **Mistral function calling infrastructure** — tool call loop in AlfredBrain
 - [x] **Phone — Search contacts** by name, returns all numbers with labels
 - [x] **Phone — Make calls** directly via voice command
@@ -30,8 +30,8 @@
 - [x] **Calculation** — Math expressions (+,-,*,/,^,%), unit conversions (length, weight, temp, volume, speed, area)
 - [x] **Calendar** — Create events (with title, time, location, description, all-day), check today/tomorrow/week schedule, open calendar
 
-## Phase 3 — Communication & Search
-- [ ] **Mail** — Compose, read, summarize emails
+## Phase 3 — Communication & Search (In Progress)
+- [x] **Mail** — Compose emails (to, subject, body, cc, bcc), open mail app, share via email
 - [ ] **Search (Device)** — Find apps, contacts, files, settings
 - [ ] **Search (Web)** — Web search and summarize results
 

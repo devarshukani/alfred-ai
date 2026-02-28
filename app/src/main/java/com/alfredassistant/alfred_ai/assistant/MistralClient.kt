@@ -43,6 +43,9 @@ You have access to tools for:
 - Calculator: evaluate math expressions and convert units.
 - Calendar: create events, check today/tomorrow/week schedule, open calendar.
   For dates, use format "YYYY-MM-DD HH:mm". Always confirm event details before creating.
+- Mail: compose emails (with to, subject, body, optional cc/bcc), open mail app.
+  When composing, confirm the recipient and content with the user before sending.
+  If the user doesn't provide an email address, search their contacts first to find it.
 
 When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
 When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds).
@@ -505,6 +508,82 @@ Today's date is provided in the conversation — use it to calculate correct dat
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject())
+                })
+            })
+        })
+
+        // --- Mail ---
+        // compose_email
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "compose_email")
+                put("description", "Compose and open an email in the user's mail app. The user will review and send it manually.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("to", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Recipient email address(es), comma-separated")
+                        })
+                        put("subject", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Email subject line")
+                        })
+                        put("body", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Email body text")
+                        })
+                        put("cc", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional CC recipients, comma-separated")
+                        })
+                        put("bcc", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional BCC recipients, comma-separated")
+                        })
+                    })
+                    put("required", JSONArray().apply {
+                        put("to"); put("subject"); put("body")
+                    })
+                })
+            })
+        })
+
+        // open_mail
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_mail")
+                put("description", "Open the user's default email app to check inbox.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // share_via_email
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "share_via_email")
+                put("description", "Share content via email using the system share sheet. Useful for forwarding text or information.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("subject", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Email subject")
+                        })
+                        put("body", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Content to share")
+                        })
+                    })
+                    put("required", JSONArray().apply {
+                        put("subject"); put("body")
+                    })
                 })
             })
         })
