@@ -14,10 +14,6 @@ import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
 
-/**
- * Transparent overlay activity that appears on top of whatever is on screen.
- * Triggered when Alfred is set as the default assistant.
- */
 class OverlayAssistActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
@@ -36,8 +32,6 @@ class OverlayAssistActivity : ComponentActivity() {
 
         setContent {
             var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-            var spokenText by remember { mutableStateOf("") }
-            var responseText by remember { mutableStateOf("") }
 
             DisposableEffect(Unit) {
                 speechHelper = SpeechHelper(
@@ -46,36 +40,27 @@ class OverlayAssistActivity : ComponentActivity() {
                         assistantState = AssistantState.LISTENING
                     },
                     onResult = { text ->
-                        spokenText = text
                         assistantState = AssistantState.PROCESSING
                         val response = AlfredBrain.generateResponse(text)
-                        responseText = response
                         speechHelper.speak(response)
                     },
                     onSpeakingStarted = {
                         runOnUiThread { assistantState = AssistantState.SPEAKING }
                     },
                     onSpeakingDone = {
-                        runOnUiThread {
-                            assistantState = AssistantState.IDLE
-                        }
+                        runOnUiThread { assistantState = AssistantState.IDLE }
                     },
-                    onError = { error ->
-                        runOnUiThread {
-                            responseText = error
-                            assistantState = AssistantState.IDLE
-                        }
+                    onError = {
+                        runOnUiThread { assistantState = AssistantState.IDLE }
                     }
                 )
                 speechHelper.init()
 
-                // Auto-start listening when overlay opens
                 if (ContextCompat.checkSelfPermission(
                         this@OverlayAssistActivity,
                         Manifest.permission.RECORD_AUDIO
                     ) == PackageManager.PERMISSION_GRANTED
                 ) {
-                    // Small delay to let speech recognizer initialize
                     android.os.Handler(mainLooper).postDelayed({
                         speechHelper.startListening()
                     }, 300)
@@ -90,17 +75,11 @@ class OverlayAssistActivity : ComponentActivity() {
 
             OverlayAssistantScreen(
                 state = assistantState,
-                spokenText = spokenText,
-                responseText = responseText,
                 onMicTap = {
                     when (assistantState) {
                         AssistantState.LISTENING -> speechHelper.stopListening()
-                        AssistantState.IDLE -> {
-                            spokenText = ""
-                            responseText = ""
-                            speechHelper.startListening()
-                        }
-                        else -> { /* ignore taps while processing/speaking */ }
+                        AssistantState.IDLE -> speechHelper.startListening()
+                        else -> {}
                     }
                 },
                 onDismiss = { finish() }
