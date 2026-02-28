@@ -23,6 +23,12 @@ class OverlayAssistActivity : ComponentActivity() {
     private lateinit var brain: AlfredBrain
     private val scope = CoroutineScope(Dispatchers.Main)
 
+    override fun finish() {
+        super.finish()
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
