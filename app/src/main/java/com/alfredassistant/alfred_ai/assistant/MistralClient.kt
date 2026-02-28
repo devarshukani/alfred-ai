@@ -33,10 +33,16 @@ You are helpful, concise, and always composed. Keep responses brief and suitable
 no more than 2-3 sentences unless the user asks for detail. Never use markdown, bullet points, 
 or formatting — speak naturally as if talking aloud.
 
-You have access to tools for phone actions. Use them when the user wants to call someone, 
-find a contact, or dial a number. When search_contacts returns multiple numbers for a contact, 
-ask the user which number to call (e.g. "Mobile or Work?"). When there are multiple contacts 
-matching, ask the user to clarify which one."""
+You have access to tools for:
+- Phone: search contacts, make calls, dial numbers. When multiple numbers exist, ask which one.
+- Alarms: set alarms (one-time or recurring with days), dismiss, snooze, show all alarms.
+  For days parameter use: Sunday=1, Monday=2, Tuesday=3, Wednesday=4, Thursday=5, Friday=6, Saturday=7.
+  For recurring alarms like "weekdays", pass [2,3,4,5,6]. For "weekends", pass [1,7].
+- Timers: set countdown timers (specify duration in seconds), show timers.
+- Stopwatch: start the stopwatch.
+
+When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
+When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds)."""
     }
 
     private val client = OkHttpClient.Builder()
@@ -216,6 +222,138 @@ matching, ask the user to clarify which one."""
                         })
                     })
                     put("required", JSONArray().apply { put("phone_number") })
+                })
+            })
+        })
+
+        // set_alarm
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "set_alarm")
+                put("description", "Set an alarm on the device. Can be one-time or recurring on specific days.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("hour", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "Hour in 24-hour format (0-23)")
+                        })
+                        put("minute", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "Minute (0-59)")
+                        })
+                        put("message", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional label for the alarm")
+                        })
+                        put("days", JSONObject().apply {
+                            put("type", "array")
+                            put("items", JSONObject().apply { put("type", "integer") })
+                            put("description", "Days to repeat: Sunday=1, Monday=2, Tuesday=3, Wednesday=4, Thursday=5, Friday=6, Saturday=7. Empty array for one-time alarm.")
+                        })
+                        put("vibrate", JSONObject().apply {
+                            put("type", "boolean")
+                            put("description", "Whether the alarm should vibrate. Default true.")
+                        })
+                    })
+                    put("required", JSONArray().apply {
+                        put("hour")
+                        put("minute")
+                    })
+                })
+            })
+        })
+
+        // dismiss_alarm
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "dismiss_alarm")
+                put("description", "Dismiss all currently ringing alarms.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // snooze_alarm
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "snooze_alarm")
+                put("description", "Snooze the currently ringing alarm.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("snooze_minutes", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "How many minutes to snooze. Optional.")
+                        })
+                    })
+                })
+            })
+        })
+
+        // show_alarms
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "show_alarms")
+                put("description", "Open the clock app to show all existing alarms.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // set_timer
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "set_timer")
+                put("description", "Set a countdown timer. Duration must be in seconds.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("seconds", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "Timer duration in seconds (e.g. 300 for 5 minutes)")
+                        })
+                        put("message", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional label for the timer")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("seconds") })
+                })
+            })
+        })
+
+        // show_timers
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "show_timers")
+                put("description", "Open the clock app to show existing timers.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // start_stopwatch
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "start_stopwatch")
+                put("description", "Start the stopwatch in the clock app.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
                 })
             })
         })

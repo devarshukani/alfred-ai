@@ -24,8 +24,9 @@
 - [x] **Phone — Make calls** directly via voice command
 - [x] **Phone — Dial number** (open dialer without auto-calling)
 - [x] **Phone — Multiple numbers** — AI asks user which number (Mobile/Work/etc.)
-- [ ] **Alarm** — Set, cancel, list alarms
-- [ ] **Timer** — Start, stop, check timers
+- [x] **Alarm** — Set alarms (one-time + recurring with day selection), dismiss, snooze, show all
+- [x] **Timer** — Set countdown timers with duration + label, show timers
+- [x] **Stopwatch** — Start stopwatch via clock app
 - [ ] **Calculation** — Math expressions, unit conversions
 - [ ] **Calendar** — Create events, check schedule, reminders
 
