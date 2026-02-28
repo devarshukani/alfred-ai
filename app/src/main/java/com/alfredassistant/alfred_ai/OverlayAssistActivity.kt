@@ -79,7 +79,11 @@ class OverlayAssistActivity : ComponentActivity() {
                         runOnUiThread { assistantState = AssistantState.SPEAKING }
                     },
                     onSpeakingDone = {
-                        runOnUiThread { assistantState = AssistantState.IDLE }
+                        runOnUiThread {
+                            assistantState = AssistantState.IDLE
+                            // Auto-start listening after response
+                            speechHelper.startListening()
+                        }
                     },
                     onError = {
                         runOnUiThread { assistantState = AssistantState.IDLE }
