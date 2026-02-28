@@ -20,19 +20,43 @@ import kotlinx.coroutines.launch
 class OverlayAssistActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
-    private val brain = AlfredBrain()
+    private lateinit var brain: AlfredBrain
     private val scope = CoroutineScope(Dispatchers.Main)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        brain = AlfredBrain(this)
+
         val permissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestPermission()
-        ) { granted ->
-            if (!granted) {
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            val micGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+            if (!micGranted) {
                 Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show()
                 finish()
             }
+        }
+
+        // Request all needed permissions
+        val neededPermissions = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            neededPermissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            neededPermissions.add(Manifest.permission.READ_CONTACTS)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            neededPermissions.add(Manifest.permission.CALL_PHONE)
+        }
+        if (neededPermissions.isNotEmpty()) {
+            permissionLauncher.launch(neededPermissions.toTypedArray())
         }
 
         setContent {
@@ -63,6 +87,7 @@ class OverlayAssistActivity : ComponentActivity() {
                 )
                 speechHelper.init()
 
+                // Auto-start listening if mic permission already granted
                 if (ContextCompat.checkSelfPermission(
                         this@OverlayAssistActivity,
                         Manifest.permission.RECORD_AUDIO
@@ -71,8 +96,6 @@ class OverlayAssistActivity : ComponentActivity() {
                     android.os.Handler(mainLooper).postDelayed({
                         speechHelper.startListening()
                     }, 300)
-                } else {
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
 
                 onDispose {

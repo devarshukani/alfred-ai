@@ -18,8 +18,12 @@
 - [x] Conversation memory (multi-turn within session, last 20 exchanges)
 - [x] System prompt: Alfred butler persona
 
-## Phase 2 — Function Calling & Device Actions
-- [ ] **Phone** — Make calls, dial contacts by name
+## Phase 2 — Function Calling & Device Actions (In Progress)
+- [x] **Mistral function calling infrastructure** — tool call loop in AlfredBrain
+- [x] **Phone — Search contacts** by name, returns all numbers with labels
+- [x] **Phone — Make calls** directly via voice command
+- [x] **Phone — Dial number** (open dialer without auto-calling)
+- [x] **Phone — Multiple numbers** — AI asks user which number (Mobile/Work/etc.)
 - [ ] **Alarm** — Set, cancel, list alarms
 - [ ] **Timer** — Start, stop, check timers
 - [ ] **Calculation** — Math expressions, unit conversions
