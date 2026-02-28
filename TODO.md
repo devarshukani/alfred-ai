@@ -6,14 +6,17 @@
 
 ---
 
-## Phase 1 — AI Chat (Current)
+## Phase 1 — AI Chat ✅
 - [x] Voice input (Speech-to-Text)
 - [x] Voice output (Text-to-Speech)
 - [x] Transparent overlay UI with animated orb
 - [x] Register as device assistant
-- [ ] **Integrate Mistral Large 3 API for intelligent responses**
-- [ ] Conversation memory (multi-turn within session)
-- [ ] System prompt: Alfred butler persona
+- [x] Zero-activity app — overlay only, no full-screen UI
+- [x] Animated orb with distinct states (idle/listening/processing/speaking)
+- [x] Dark gold theme (Batman's Alfred aesthetic)
+- [x] Integrate Mistral Large 3 API for intelligent responses
+- [x] Conversation memory (multi-turn within session, last 20 exchanges)
+- [x] System prompt: Alfred butler persona
 
 ## Phase 2 — Function Calling & Device Actions
 - [ ] **Phone** — Make calls, dial contacts by name
