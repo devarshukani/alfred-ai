@@ -22,7 +22,7 @@ class AlfredBrain(context: Context) {
     private val calendarAction = CalendarAction(context)
     private val mailAction = MailAction(context)
     private val searchAction = SearchAction(context)
-    private val weatherAction = WeatherAction()
+    private val weatherAction = WeatherAction(context)
     private val paymentAction = PaymentAction(context)
     private val notificationAction = NotificationAction(context)
     private val memoryStore = MemoryStore(context)
@@ -145,6 +145,7 @@ class AlfredBrain(context: Context) {
 
                 // --- Weather ---
                 "get_weather" -> weatherAction.getWeather(call.arguments.getString("location"))
+                "get_weather_here" -> weatherAction.getWeatherHere()
 
                 // --- Payments ---
                 "launch_payment_app" -> paymentAction.launchPaymentApp(call.arguments.getString("app_name"))

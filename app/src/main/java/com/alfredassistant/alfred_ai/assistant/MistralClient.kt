@@ -744,6 +744,18 @@ Today's date is provided in the conversation — use it to calculate correct dat
             })
         })
 
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_weather_here")
+                put("description", "Get current weather and forecast for the user's current GPS location. Use this when the user says 'weather here', 'weather now', or doesn't specify a city.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
         // --- Payments ---
         tools.put(JSONObject().apply {
             put("type", "function")

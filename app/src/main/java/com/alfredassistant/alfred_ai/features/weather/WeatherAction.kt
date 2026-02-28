@@ -1,6 +1,11 @@
 package com.alfredassistant.alfred_ai.features.weather
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.net.Uri
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -10,9 +15,9 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Weather using Open-Meteo API — free, no API key needed.
- * Uses geocoding to resolve city names to coordinates.
+ * Supports city name lookup and GPS-based current location.
  */
-class WeatherAction {
+class WeatherAction(private val context: Context) {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -95,6 +100,101 @@ class WeatherAction {
             "Weather lookup failed: ${e.message}"
         }
     }
+
+    /**
+     * Get weather for the user's current GPS location.
+     */
+    suspend fun getWeatherHere(): String = withContext(Dispatchers.IO) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            return@withContext "Location permission not granted. Please enable location access."
+        }
+
+        try {
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+
+            if (location == null) {
+                return@withContext "Could not determine current location. Please try specifying a city name."
+            }
+
+            val lat = location.latitude
+            val lon = location.longitude
+
+            // Reverse geocode to get city name
+            val geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=&latitude=$lat&longitude=$lon&count=1"
+            var cityName = "Current location"
+
+            // Try reverse geocoding via nominatim
+            try {
+                val revUrl = "https://nominatim.openstreetmap.org/reverse?lat=$lat&lon=$lon&format=json"
+                val revReq = Request.Builder().url(revUrl)
+                    .addHeader("User-Agent", "AlfredAI/1.0")
+                    .build()
+                val revResp = client.newCall(revReq).execute()
+                val revBody = revResp.body?.string() ?: ""
+                val revJson = JSONObject(revBody)
+                val address = revJson.optJSONObject("address")
+                cityName = address?.optString("city", "")
+                    ?.ifBlank { address.optString("town", "") }
+                    ?.ifBlank { address.optString("village", "") }
+                    ?.ifBlank { "Current location" } ?: "Current location"
+            } catch (_: Exception) {}
+
+            getWeatherByCoords(lat, lon, cityName)
+        } catch (e: Exception) {
+            "Weather lookup failed: ${e.message}"
+        }
+    }
+
+    private suspend fun getWeatherByCoords(lat: Double, lon: Double, cityName: String): String =
+        withContext(Dispatchers.IO) {
+            val weatherUrl = "https://api.open-meteo.com/v1/forecast?" +
+                "latitude=$lat&longitude=$lon" +
+                "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m" +
+                "&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max" +
+                "&timezone=auto&forecast_days=3"
+
+            val weatherReq = Request.Builder().url(weatherUrl).build()
+            val weatherResp = client.newCall(weatherReq).execute()
+            val weatherBody = weatherResp.body?.string() ?: ""
+            val weatherJson = JSONObject(weatherBody)
+
+            val current = weatherJson.getJSONObject("current")
+            val daily = weatherJson.getJSONObject("daily")
+
+            val result = JSONObject().apply {
+                put("location", cityName)
+                put("current", JSONObject().apply {
+                    put("temperature_c", current.getDouble("temperature_2m"))
+                    put("feels_like_c", current.getDouble("apparent_temperature"))
+                    put("condition", weatherCodeToText(current.getInt("weather_code")))
+                    put("humidity_percent", current.getInt("relative_humidity_2m"))
+                    put("wind_speed_kmh", current.getDouble("wind_speed_10m"))
+                })
+                val forecastArr = org.json.JSONArray()
+                val dates = daily.getJSONArray("time")
+                val maxTemps = daily.getJSONArray("temperature_2m_max")
+                val minTemps = daily.getJSONArray("temperature_2m_min")
+                val codes = daily.getJSONArray("weather_code")
+                val rainChance = daily.getJSONArray("precipitation_probability_max")
+                for (i in 0 until dates.length()) {
+                    forecastArr.put(JSONObject().apply {
+                        put("date", dates.getString(i))
+                        put("high_c", maxTemps.getDouble(i))
+                        put("low_c", minTemps.getDouble(i))
+                        put("condition", weatherCodeToText(codes.getInt(i)))
+                        put("rain_chance_percent", rainChance.optInt(i, 0))
+                    })
+                }
+                put("forecast", forecastArr)
+            }
+            result.toString()
+        }
 
     private fun weatherCodeToText(code: Int): String = when (code) {
         0 -> "Clear sky"
