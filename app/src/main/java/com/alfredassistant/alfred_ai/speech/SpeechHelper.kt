@@ -24,7 +24,6 @@ class SpeechHelper(
     private val handler = Handler(Looper.getMainLooper())
     private var isSpeaking = false
     private var speakingSimRunnable: Runnable? = null
-    private var sherpaTts: SherpaOnnxTts? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun init() {
@@ -59,8 +58,8 @@ class SpeechHelper(
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
-        // Initialize sherpa-onnx TTS (British male voice — Alfred the butler)
-        sherpaTts = SherpaOnnxTts(context).also { it.init() }
+        // Initialize sherpa-onnx TTS singleton (model loaded once, reused across calls)
+        SherpaOnnxTts.createTts(context)
     }
 
     fun startListening() {
@@ -110,16 +109,14 @@ class SpeechHelper(
     }
 
     fun speak(text: String) {
-        val tts = sherpaTts
-        if (tts == null) {
+        if (SherpaOnnxTts.tts == null) {
             onError("TTS not ready")
             return
         }
-        // sherpa-onnx generate+stream is blocking, run on background thread
         Thread {
-            tts.speak(
+            SherpaOnnxTts.speak(
                 text = text,
-                speakerId = 0, // speaker 0 of the southern_english_male model
+                speakerId = 0,
                 speed = 1.0f,
                 onStart = {
                     mainHandler.post {
@@ -140,7 +137,6 @@ class SpeechHelper(
     fun shutdown() {
         stopSpeakingSimulation()
         speechRecognizer?.destroy()
-        sherpaTts?.shutdown()
-        sherpaTts = null
+        // Don't shutdown the singleton — it lives for the app's lifetime
     }
 }

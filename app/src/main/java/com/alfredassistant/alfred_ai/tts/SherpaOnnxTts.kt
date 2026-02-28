@@ -1,13 +1,11 @@
 package com.alfredassistant.alfred_ai.tts
 
 import android.content.Context
-import android.content.res.AssetManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
-import com.k2fsa.sherpa.onnx.GeneratedAudio
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -18,32 +16,42 @@ import java.io.IOException
 
 private const val TAG = "SherpaOnnxTts"
 
-// Model: vits-piper-en_GB-southern_english_male-medium
-// British male voice — fits the Alfred butler persona
-private const val MODEL_DIR = "vits-piper-en_GB-southern_english_male-medium"
-private const val MODEL_NAME = "en_GB-southern_english_male-medium.onnx"
+// Generic asset directory — the setup script places any model here.
+// Change the model by editing setup-sherpa-tts.sh only.
+private const val MODEL_DIR = "tts-model"
 private const val DATA_DIR = "$MODEL_DIR/espeak-ng-data"
 
-class SherpaOnnxTts(private val context: Context) {
+object SherpaOnnxTts {
 
-    private var tts: OfflineTts? = null
+    var tts: OfflineTts? = null
+        private set
+
     private var audioTrack: AudioTrack? = null
+
     @Volatile
     private var stopped = false
 
-    fun init() {
+    /** Call once from Application or Activity. Safe to call multiple times — loads only once. */
+    fun createTts(context: Context) {
+        if (tts != null) return
         Log.i(TAG, "Initializing sherpa-onnx TTS")
 
-        // espeak-ng-data must be copied to external files (native code needs filesystem paths)
-        val externalDataDir = copyDataDir(DATA_DIR)
+        val assets = context.assets
+
+        // Find the .onnx model file automatically
+        val modelName = assets.list(MODEL_DIR)
+            ?.firstOrNull { it.endsWith(".onnx") }
+            ?: error("No .onnx model found in assets/$MODEL_DIR")
+
+        // espeak-ng-data must live on the real filesystem for native code
+        val externalDataDir = copyDataDir(context, DATA_DIR)
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
-                    model = "$MODEL_DIR/$MODEL_NAME",
+                    model = "$MODEL_DIR/$modelName",
                     tokens = "$MODEL_DIR/tokens.txt",
                     dataDir = externalDataDir,
-                    lengthScale = 1.0f,
                 ),
                 numThreads = 2,
                 debug = false,
@@ -51,9 +59,9 @@ class SherpaOnnxTts(private val context: Context) {
             ),
         )
 
-        tts = OfflineTts(assetManager = context.assets, config = config)
+        tts = OfflineTts(assetManager = assets, config = config)
         initAudioTrack()
-        Log.i(TAG, "sherpa-onnx TTS ready, sampleRate=${tts?.sampleRate()}, speakers=${tts?.numSpeakers()}")
+        Log.i(TAG, "TTS ready — model=$modelName sampleRate=${tts?.sampleRate()} speakers=${tts?.numSpeakers()}")
     }
 
     private fun initAudioTrack() {
@@ -82,8 +90,7 @@ class SherpaOnnxTts(private val context: Context) {
     }
 
     /**
-     * Generate and play TTS audio. Calls [onStart] when playback begins,
-     * [onDone] when finished. Runs blocking — call from a background thread.
+     * Generate and play TTS audio. Blocking — call from a background thread.
      */
     fun speak(
         text: String,
@@ -99,9 +106,6 @@ class SherpaOnnxTts(private val context: Context) {
         }
 
         stopped = false
-
-        // Use generate() instead of generateWithCallback() to avoid
-        // JNI lambda desugaring issues with R8/D8 synthetic classes
         val audio = engine.generate(text = text, sid = speakerId, speed = speed)
 
         if (stopped || audio.samples.isEmpty()) {
@@ -114,7 +118,6 @@ class SherpaOnnxTts(private val context: Context) {
         audioTrack?.play()
         onStart()
 
-        // Stream in chunks for responsiveness and stop support
         val chunkSize = 4096
         var offset = 0
         while (offset < audio.samples.size && !stopped) {
@@ -141,24 +144,22 @@ class SherpaOnnxTts(private val context: Context) {
         tts = null
     }
 
-    // --- Asset copying for espeak-ng-data (native code needs real file paths) ---
+    // --- Asset copying (espeak-ng-data needs real filesystem paths) ---
 
-    private fun copyDataDir(dataDir: String): String {
-        copyAssets(dataDir)
-        val base = context.getExternalFilesDir(null)!!.absolutePath
-        return "$base/$dataDir"
+    private fun copyDataDir(context: Context, dataDir: String): String {
+        copyAssets(context, dataDir)
+        return "${context.getExternalFilesDir(null)!!.absolutePath}/$dataDir"
     }
 
-    private fun copyAssets(path: String) {
+    private fun copyAssets(context: Context, path: String) {
         try {
             val list = context.assets.list(path)
             if (list.isNullOrEmpty()) {
-                copyFile(path)
+                copyFile(context, path)
             } else {
-                val dir = File("${context.getExternalFilesDir(null)}/$path")
-                dir.mkdirs()
+                File("${context.getExternalFilesDir(null)}/$path").mkdirs()
                 for (item in list) {
-                    copyAssets("$path/$item")
+                    copyAssets(context, "$path/$item")
                 }
             }
         } catch (ex: IOException) {
@@ -166,10 +167,10 @@ class SherpaOnnxTts(private val context: Context) {
         }
     }
 
-    private fun copyFile(filename: String) {
+    private fun copyFile(context: Context, filename: String) {
         try {
             val dest = File("${context.getExternalFilesDir(null)}/$filename")
-            if (dest.exists()) return // skip if already copied
+            if (dest.exists()) return
             context.assets.open(filename).use { input ->
                 FileOutputStream(dest).use { output ->
                     input.copyTo(output)
