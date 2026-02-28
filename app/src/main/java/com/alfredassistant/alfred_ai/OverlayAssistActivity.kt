@@ -13,10 +13,15 @@ import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class OverlayAssistActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
+    private val brain = AlfredBrain()
+    private val scope = CoroutineScope(Dispatchers.Main)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,8 +46,10 @@ class OverlayAssistActivity : ComponentActivity() {
                     },
                     onResult = { text ->
                         assistantState = AssistantState.PROCESSING
-                        val response = AlfredBrain.generateResponse(text)
-                        speechHelper.speak(response)
+                        scope.launch {
+                            val response = brain.processInput(text)
+                            speechHelper.speak(response)
+                        }
                     },
                     onSpeakingStarted = {
                         runOnUiThread { assistantState = AssistantState.SPEAKING }
