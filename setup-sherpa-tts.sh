@@ -10,7 +10,7 @@ SHERPA_VERSION="1.12.28"
 # CHANGE MODEL HERE — everything else adapts automatically.
 # Browse models: https://github.com/k2-fsa/sherpa-onnx/releases/tag/tts-models
 # ============================================================
-MODEL="vits-piper-en_GB-southern_english_male-medium"
+MODEL="vits-piper-en_US-ryan-medium"
 
 ASSETS="app/src/main/assets"
 GENERIC_DIR="$ASSETS/tts-model"
