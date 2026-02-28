@@ -40,9 +40,14 @@ You have access to tools for:
   For recurring alarms like "weekdays", pass [2,3,4,5,6]. For "weekends", pass [1,7].
 - Timers: set countdown timers (specify duration in seconds), show timers.
 - Stopwatch: start the stopwatch.
+- Calculator: evaluate math expressions and convert units.
+- Calendar: create events, check today/tomorrow/week schedule, open calendar.
+  For dates, use format "YYYY-MM-DD HH:mm". Always confirm event details before creating.
 
 When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
-When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds)."""
+When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds).
+For calendar events, infer reasonable end times if not specified (e.g. 1 hour after start).
+Today's date is provided in the conversation — use it to calculate correct dates for "tomorrow", "next Monday", etc."""
     }
 
     private val client = OkHttpClient.Builder()
@@ -92,9 +97,12 @@ When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 3
 
     private fun makeRequest(): ChatResult {
         val messages = JSONArray()
+        // Inject current date/time into system prompt
+        val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm, EEEE", java.util.Locale.getDefault())
+            .format(java.util.Date())
         messages.put(JSONObject().apply {
             put("role", "system")
-            put("content", SYSTEM_PROMPT)
+            put("content", "$SYSTEM_PROMPT\n\nCurrent date and time: $now")
         })
         conversationHistory.forEach { messages.put(it) }
 
@@ -351,6 +359,149 @@ When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 3
             put("function", JSONObject().apply {
                 put("name", "start_stopwatch")
                 put("description", "Start the stopwatch in the clock app.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // --- Calculator ---
+        // evaluate_expression
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "evaluate_expression")
+                put("description", "Evaluate a mathematical expression. Supports +, -, *, /, ^, %, parentheses. Example: '(15 + 25) * 3'")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("expression", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The math expression to evaluate")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("expression") })
+                })
+            })
+        })
+
+        // convert_unit
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "convert_unit")
+                put("description", "Convert a value from one unit to another. Supports length (km, miles, m, ft, cm, inches), weight (kg, lbs, g, oz), temperature (celsius/c, fahrenheit/f, kelvin), volume (liters, gallons, ml), speed (kmh, mph), area (sqm, sqft, acres, hectares).")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("value", JSONObject().apply {
+                            put("type", "number")
+                            put("description", "The numeric value to convert")
+                        })
+                        put("from_unit", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Source unit (e.g. km, lbs, celsius, liters)")
+                        })
+                        put("to_unit", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Target unit (e.g. miles, kg, fahrenheit, gallons)")
+                        })
+                    })
+                    put("required", JSONArray().apply {
+                        put("value"); put("from_unit"); put("to_unit")
+                    })
+                })
+            })
+        })
+
+        // --- Calendar ---
+        // create_calendar_event
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "create_calendar_event")
+                put("description", "Create a new calendar event. Opens the system calendar to confirm.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("title", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Event title")
+                        })
+                        put("start_datetime", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Start date and time in format YYYY-MM-DD HH:mm")
+                        })
+                        put("end_datetime", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "End date and time in format YYYY-MM-DD HH:mm")
+                        })
+                        put("description", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional event description")
+                        })
+                        put("location", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional event location")
+                        })
+                        put("all_day", JSONObject().apply {
+                            put("type", "boolean")
+                            put("description", "Whether this is an all-day event. Default false.")
+                        })
+                    })
+                    put("required", JSONArray().apply {
+                        put("title"); put("start_datetime"); put("end_datetime")
+                    })
+                })
+            })
+        })
+
+        // get_today_events
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_today_events")
+                put("description", "Get all calendar events for today.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // get_tomorrow_events
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_tomorrow_events")
+                put("description", "Get all calendar events for tomorrow.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // get_week_events
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_week_events")
+                put("description", "Get all calendar events for the rest of this week.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // open_calendar
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_calendar")
+                put("description", "Open the calendar app.")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject())

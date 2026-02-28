@@ -2,6 +2,8 @@ package com.alfredassistant.alfred_ai.assistant
 
 import android.content.Context
 import com.alfredassistant.alfred_ai.features.alarm.AlarmAction
+import com.alfredassistant.alfred_ai.features.calculator.CalculatorAction
+import com.alfredassistant.alfred_ai.features.calendar.CalendarAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
 
@@ -13,6 +15,8 @@ class AlfredBrain(context: Context) {
     private val mistral = MistralClient()
     private val phoneAction = PhoneAction(context)
     private val alarmAction = AlarmAction(context)
+    private val calculatorAction = CalculatorAction()
+    private val calendarAction = CalendarAction(context)
 
     suspend fun processInput(userSpeech: String): String {
         var result = mistral.chat(userSpeech)
@@ -107,6 +111,46 @@ class AlfredBrain(context: Context) {
                 "start_stopwatch" -> {
                     alarmAction.startStopwatch()
                     "Stopwatch started."
+                }
+
+                // --- Calculator ---
+                "evaluate_expression" -> {
+                    val expr = call.arguments.getString("expression")
+                    val result = calculatorAction.evaluate(expr)
+                    "Result: $result"
+                }
+                "convert_unit" -> {
+                    val value = call.arguments.getDouble("value")
+                    val from = call.arguments.getString("from_unit")
+                    val to = call.arguments.getString("to_unit")
+                    calculatorAction.convertUnit(value, from, to)
+                }
+
+                // --- Calendar ---
+                "create_calendar_event" -> {
+                    val title = call.arguments.getString("title")
+                    val startStr = call.arguments.getString("start_datetime")
+                    val endStr = call.arguments.getString("end_datetime")
+                    val desc = call.arguments.optString("description", null)
+                    val location = call.arguments.optString("location", null)
+                    val allDay = call.arguments.optBoolean("all_day", false)
+                    val startMillis = calendarAction.parseDateTime(startStr)
+                    val endMillis = calendarAction.parseDateTime(endStr)
+                    calendarAction.createEvent(title, startMillis, endMillis, desc, location, allDay)
+                    "Calendar event '$title' created."
+                }
+                "get_today_events" -> {
+                    calendarAction.getTodayEvents()
+                }
+                "get_tomorrow_events" -> {
+                    calendarAction.getTomorrowEvents()
+                }
+                "get_week_events" -> {
+                    calendarAction.getWeekEvents()
+                }
+                "open_calendar" -> {
+                    calendarAction.openCalendar()
+                    "Calendar opened."
                 }
 
                 else -> "Unknown function: ${call.functionName}"

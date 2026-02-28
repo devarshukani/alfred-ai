@@ -27,8 +27,8 @@
 - [x] **Alarm** — Set alarms (one-time + recurring with day selection), dismiss, snooze, show all
 - [x] **Timer** — Set countdown timers with duration + label, show timers
 - [x] **Stopwatch** — Start stopwatch via clock app
-- [ ] **Calculation** — Math expressions, unit conversions
-- [ ] **Calendar** — Create events, check schedule, reminders
+- [x] **Calculation** — Math expressions (+,-,*,/,^,%), unit conversions (length, weight, temp, volume, speed, area)
+- [x] **Calendar** — Create events (with title, time, location, description, all-day), check today/tomorrow/week schedule, open calendar
 
 ## Phase 3 — Communication & Search
 - [ ] **Mail** — Compose, read, summarize emails

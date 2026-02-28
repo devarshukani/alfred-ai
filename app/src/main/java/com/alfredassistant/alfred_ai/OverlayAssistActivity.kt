@@ -55,6 +55,16 @@ class OverlayAssistActivity : ComponentActivity() {
         ) {
             neededPermissions.add(Manifest.permission.CALL_PHONE)
         }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            neededPermissions.add(Manifest.permission.READ_CALENDAR)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            neededPermissions.add(Manifest.permission.WRITE_CALENDAR)
+        }
         if (neededPermissions.isNotEmpty()) {
             permissionLauncher.launch(neededPermissions.toTypedArray())
         }
