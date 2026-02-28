@@ -57,7 +57,7 @@ class AlfredBrain(context: Context) {
             result = mistral.sendToolResults(toolResults)
         }
 
-        return result.content ?: "I've completed the action, sir."
+        return result.content ?: "All done!"
     }
 
     private suspend fun executeToolCall(call: ToolCall): String {

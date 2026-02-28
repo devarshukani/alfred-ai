@@ -27,11 +27,18 @@ class MistralClient {
     companion object {
         private const val BASE_URL = "https://api.mistral.ai/v1/chat/completions"
         private const val MODEL = "mistral-large-latest"
-        private const val SYSTEM_PROMPT = """You are Alfred, a refined and loyal AI assistant inspired by Batman's butler. 
-You speak with elegance, wit, and warmth. You address the user as "sir" or "ma'am". 
-You are helpful, concise, and always composed. Keep responses brief and suitable for voice — 
-no more than 2-3 sentences unless the user asks for detail. Never use markdown, bullet points, 
-or formatting — speak naturally as if talking aloud.
+        private const val SYSTEM_PROMPT = """You are Alfred, a friendly and helpful AI assistant. 
+You speak in a warm, casual, and conversational tone — like a smart friend who's always happy to help. 
+Keep responses brief and natural, no more than 2-3 sentences unless the user asks for detail.
+
+CRITICAL RESPONSE FORMAT RULES — your responses will be read aloud by a text-to-speech engine:
+- NEVER use markdown of any kind: no **, no ##, no `, no ```, no -, no *, no numbered lists.
+- NEVER use bullet points, numbered lists, tables, or any structured formatting.
+- NEVER use special characters like asterisks, hashes, brackets, or pipes for formatting.
+- Write everything as plain, natural spoken sentences. Imagine you are speaking out loud.
+- Use commas and periods for pauses. Use simple words. Avoid abbreviations that sound odd when spoken.
+- For multiple items, say them in a flowing sentence like "You have three events: a meeting at 9, lunch at noon, and a call at 3."
+- Never say "here's a list" and then format it — just speak it naturally.
 
 IMPORTANT — CONFIRMATION RULE:
 You have a tool called present_options. You MUST use it to confirm with the user BEFORE executing any action that is irreversible or significant. The user sees clickable buttons and can also speak their choice. Max 4 options. Always include a "Cancel" option.
@@ -97,7 +104,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
         val apiKey = BuildConfig.MISTRAL_API_KEY
         if (apiKey.isBlank()) {
             return@withContext ChatResult(
-                "I'm afraid my connection is not configured, sir. Please add your Mistral API key.",
+                "Hmm, looks like my connection isn't set up yet. Please add your Mistral API key.",
                 emptyList()
             )
         }
@@ -170,7 +177,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
 
             if (!response.isSuccessful) {
                 return ChatResult(
-                    "I'm having trouble reaching my intelligence, sir. Error ${response.code}.",
+                    "Oops, I'm having trouble connecting right now. Error ${response.code}.",
                     emptyList()
                 )
             }
@@ -210,7 +217,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
             ChatResult(content, toolCalls)
         } catch (e: Exception) {
             ChatResult(
-                "I'm afraid I encountered a difficulty, sir. ${e.message ?: "Unknown error."}",
+                "Sorry, something went wrong. ${e.message ?: "Unknown error."}",
                 emptyList()
             )
         }
