@@ -11,40 +11,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun OverlayAssistantScreen(
+fun WaveAssistantScreen(
     state: AssistantState,
-    interfaceMode: InterfaceMode,
     audioLevel: Float,
-    confirmation: ConfirmationRequest?,
-    onMicTap: () -> Unit,
-    onOptionSelected: (String) -> Unit,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    when (interfaceMode) {
-        InterfaceMode.ORB -> OrbAssistantScreen(
-            state = state,
-            confirmation = confirmation,
-            onMicTap = onMicTap,
-            onOptionSelected = onOptionSelected,
-            onDismiss = onDismiss,
-            modifier = modifier
-        )
-        InterfaceMode.WAVE -> WaveAssistantScreen(
-            state = state,
-            audioLevel = audioLevel,
-            confirmation = confirmation,
-            onMicTap = onMicTap,
-            onOptionSelected = onOptionSelected,
-            onDismiss = onDismiss,
-            modifier = modifier
-        )
-    }
-}
-
-@Composable
-private fun OrbAssistantScreen(
-    state: AssistantState,
     confirmation: ConfirmationRequest?,
     onMicTap: () -> Unit,
     onOptionSelected: (String) -> Unit,
@@ -60,20 +29,22 @@ private fun OrbAssistantScreen(
                 interactionSource = remember { MutableInteractionSource() }
             ) {
                 if (state == AssistantState.IDLE) onDismiss()
-            },
-        contentAlignment = Alignment.BottomCenter
+            }
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(bottom = 60.dp)
+            verticalArrangement = Arrangement.Bottom,
+            modifier = Modifier.fillMaxSize()
         ) {
             ConfirmationBox(
                 confirmation = confirmation,
                 onOptionSelected = onOptionSelected,
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             )
-            AlfredOrb(
+
+            AlfredWaveBar(
                 state = state,
+                audioLevel = audioLevel,
                 onClick = onMicTap
             )
         }

@@ -13,6 +13,7 @@ import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import com.alfredassistant.alfred_ai.ui.InterfaceMode
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +46,6 @@ class OverlayAssistActivity : ComponentActivity() {
             }
         }
 
-        // Request all needed permissions
         val neededPermissions = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -72,14 +72,14 @@ class OverlayAssistActivity : ComponentActivity() {
         setContent {
             var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
             var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
+            var audioLevel by remember { mutableFloatStateOf(0f) }
+            val interfaceMode = InterfaceMode.WAVE
 
-            // Wire up the brain's confirmation callback
             LaunchedEffect(Unit) {
                 brain.onConfirmationNeeded = { request ->
                     runOnUiThread {
                         currentConfirmation = request
                         assistantState = AssistantState.AWAITING_CONFIRMATION
-                        // Speak the prompt so user can hear it
                         speechHelper.speak(request.prompt)
                     }
                 }
@@ -92,7 +92,6 @@ class OverlayAssistActivity : ComponentActivity() {
                         assistantState = AssistantState.LISTENING
                     },
                     onResult = { text ->
-                        // If awaiting confirmation, treat speech as option selection
                         if (assistantState == AssistantState.AWAITING_CONFIRMATION && currentConfirmation != null) {
                             currentConfirmation = null
                             assistantState = AssistantState.PROCESSING
@@ -107,7 +106,6 @@ class OverlayAssistActivity : ComponentActivity() {
                     },
                     onSpeakingStarted = {
                         runOnUiThread {
-                            // Don't override AWAITING_CONFIRMATION with SPEAKING
                             if (assistantState != AssistantState.AWAITING_CONFIRMATION) {
                                 assistantState = AssistantState.SPEAKING
                             }
@@ -116,7 +114,6 @@ class OverlayAssistActivity : ComponentActivity() {
                     onSpeakingDone = {
                         runOnUiThread {
                             if (assistantState == AssistantState.AWAITING_CONFIRMATION) {
-                                // After speaking the prompt, start listening for voice selection
                                 speechHelper.startListening()
                             } else {
                                 assistantState = AssistantState.IDLE
@@ -126,6 +123,9 @@ class OverlayAssistActivity : ComponentActivity() {
                     },
                     onError = {
                         runOnUiThread { assistantState = AssistantState.IDLE }
+                    },
+                    onAudioLevel = { level ->
+                        audioLevel = level
                     }
                 )
                 speechHelper.init()
@@ -147,20 +147,18 @@ class OverlayAssistActivity : ComponentActivity() {
 
             OverlayAssistantScreen(
                 state = assistantState,
+                interfaceMode = interfaceMode,
+                audioLevel = audioLevel,
                 confirmation = currentConfirmation,
                 onMicTap = {
                     when (assistantState) {
                         AssistantState.LISTENING -> speechHelper.stopListening()
                         AssistantState.IDLE -> speechHelper.startListening()
-                        AssistantState.AWAITING_CONFIRMATION -> {
-                            // Tapping mic while awaiting starts listening for voice selection
-                            speechHelper.startListening()
-                        }
+                        AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
                         else -> {}
                     }
                 },
                 onOptionSelected = { selectedOption ->
-                    // User tapped an option chip
                     currentConfirmation = null
                     assistantState = AssistantState.PROCESSING
                     brain.submitOptionSelection(selectedOption)

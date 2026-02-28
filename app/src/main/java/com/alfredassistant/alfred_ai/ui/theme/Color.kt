@@ -24,3 +24,13 @@ val AlfredCyan = Color(0xFF00BCD4)
 val AlfredTextPrimary = Color(0xFFE8E6E3)
 val AlfredTextSecondary = Color(0xFF9E9E9E)
 val AlfredTextDim = Color(0xFF6B6B7B)
+
+// Gemini-style wave colors
+val WaveBlue = Color(0xFF4285F4)
+val WaveCyan = Color(0xFF00BCD4)
+val WaveGreen = Color(0xFF34A853)
+val WaveYellow = Color(0xFFFBBC05)
+val WaveRed = Color(0xFFEA4335)
+val WavePurple = Color(0xFF9C27B0)
+val WavePink = Color(0xFFE91E63)
+val WaveOrange = Color(0xFFFF9800)
