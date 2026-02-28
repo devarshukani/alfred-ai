@@ -28,6 +28,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // If launched via assistant trigger, redirect to transparent overlay
+        if (intent?.action == Intent.ACTION_ASSIST ||
+            intent?.action == Intent.ACTION_VOICE_COMMAND ||
+            intent?.action == "android.intent.action.SEARCH_LONG_PRESS"
+        ) {
+            val overlayIntent = Intent(this, OverlayAssistActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+            startActivity(overlayIntent)
+            finish()
+            return
+        }
+
         enableEdgeToEdge()
 
         val permissionLauncher = registerForActivityResult(
@@ -79,12 +93,6 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                     speechHelper.init()
-
-                    // Auto-start listening if launched as assistant
-                    if (intent?.getBooleanExtra("auto_listen", false) == true) {
-                        assistantState = AssistantState.LISTENING
-                        speechHelper.startListening()
-                    }
 
                     onDispose {
                         speechHelper.shutdown()
