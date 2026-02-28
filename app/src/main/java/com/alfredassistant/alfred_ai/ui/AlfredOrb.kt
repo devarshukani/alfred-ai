@@ -1,6 +1,5 @@
 package com.alfredassistant.alfred_ai.ui
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
@@ -11,12 +10,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 import com.alfredassistant.alfred_ai.ui.theme.*
+import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
@@ -27,115 +29,92 @@ fun AlfredOrb(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "orb")
 
-    // --- Idle: slow breathing ---
+    // === IDLE: gentle breathing ===
     val idleBreath by infiniteTransition.animateFloat(
-        initialValue = 0.85f,
-        targetValue = 1f,
+        initialValue = 0.92f, targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "idleBreath"
+            tween(2800, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "idleBreath"
     )
     val idleGlow by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.35f,
+        initialValue = 0.08f, targetValue = 0.22f,
         animationSpec = infiniteRepeatable(
-            animation = tween(3000, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "idleGlow"
+            tween(2800, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "idleGlow"
     )
 
-    // --- Listening: expanding pulse rings ---
-    val listenPulse1 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
+    // === LISTENING: staggered ripple rings ===
+    val ripple1 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "listenPulse1"
+            tween(1800, easing = LinearEasing), RepeatMode.Restart
+        ), label = "ripple1"
     )
-    val listenPulse2 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
+    val ripple2 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing,
-                delayMillis = 500),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "listenPulse2"
+            tween(1800, easing = LinearEasing, delayMillis = 600),
+            RepeatMode.Restart
+        ), label = "ripple2"
     )
-    val listenPulse3 by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
+    val ripple3 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing,
-                delayMillis = 1000),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "listenPulse3"
+            tween(1800, easing = LinearEasing, delayMillis = 1200),
+            RepeatMode.Restart
+        ), label = "ripple3"
+    )
+    val listenPulse by infiniteTransition.animateFloat(
+        initialValue = 0.95f, targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            tween(600, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "listenPulse"
     )
 
-    // --- Processing: rotating arc ---
-    val processRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
+    // === PROCESSING: dual counter-rotating arcs ===
+    val procRot1 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "processRotation"
+            tween(1400, easing = LinearEasing), RepeatMode.Restart
+        ), label = "procRot1"
     )
-    val processArc by infiniteTransition.animateFloat(
-        initialValue = 40f,
-        targetValue = 270f,
+    val procRot2 by infiniteTransition.animateFloat(
+        initialValue = 360f, targetValue = 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "processArc"
+            tween(1000, easing = LinearEasing), RepeatMode.Restart
+        ), label = "procRot2"
+    )
+    val procArc by infiniteTransition.animateFloat(
+        initialValue = 50f, targetValue = 200f,
+        animationSpec = infiniteRepeatable(
+            tween(700, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "procArc"
     )
 
-    // --- Speaking: rhythmic scale + glow ---
+    // === SPEAKING: multi-wave rings ===
+    val speakPhase by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            tween(1600, easing = LinearEasing), RepeatMode.Restart
+        ), label = "speakPhase"
+    )
+    val speakPhase2 by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 2f * Math.PI.toFloat(),
+        animationSpec = infiniteRepeatable(
+            tween(2200, easing = LinearEasing), RepeatMode.Restart
+        ), label = "speakPhase2"
+    )
     val speakScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.12f,
+        initialValue = 0.96f, targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
-            animation = tween(400, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "speakScale"
+            tween(350, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "speakScale"
     )
     val speakGlow by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
+        initialValue = 0.15f, targetValue = 0.45f,
         animationSpec = infiniteRepeatable(
-            animation = tween(400, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "speakGlow"
-    )
-    val speakRing by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "speakRing"
-    )
-
-    val coreColor by animateColorAsState(
-        targetValue = when (state) {
-            AssistantState.IDLE -> AlfredGold.copy(alpha = 0.8f)
-            AssistantState.LISTENING -> AlfredRed
-            AssistantState.PROCESSING -> AlfredAmber
-            AssistantState.SPEAKING -> AlfredGold
-        },
-        animationSpec = tween(500),
-        label = "coreColor"
+            tween(350, easing = EaseInOut), RepeatMode.Reverse
+        ), label = "speakGlow"
     )
 
     Box(
@@ -148,169 +127,164 @@ fun AlfredOrb(
         contentAlignment = Alignment.Center
     ) {
         Canvas(modifier = Modifier.size(200.dp)) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            val baseRadius = size.minDimension * 0.18f
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val center = Offset(cx, cy)
+            val baseR = size.minDimension * 0.19f
+
+            // Core orb gradient — always gold, always solid
+            val coreGradient = Brush.radialGradient(
+                colors = listOf(
+                    AlfredGoldLight,
+                    AlfredGold,
+                    AlfredGoldDim.copy(alpha = 0.9f)
+                ),
+                center = center
+            )
 
             when (state) {
                 AssistantState.IDLE -> {
-                    // Outer glow
+                    val r = baseR * idleBreath
+                    // Soft outer glow
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(
-                                coreColor.copy(alpha = idleGlow),
-                                Color.Transparent
-                            ),
-                            center = center,
-                            radius = baseRadius * 2.2f
+                            listOf(AlfredGold.copy(alpha = idleGlow), Color.Transparent),
+                            center = center, radius = r * 2.2f
                         ),
-                        radius = baseRadius * 2.2f,
-                        center = center
+                        radius = r * 2.2f, center = center
                     )
-                    // Core orb
+                    // Thin outer ring
                     drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                AlfredGoldLight,
-                                coreColor,
-                                AlfredGoldDim
-                            ),
-                            center = center,
-                            radius = baseRadius * idleBreath
-                        ),
-                        radius = baseRadius * idleBreath,
-                        center = center
+                        color = AlfredGold.copy(alpha = 0.15f),
+                        radius = r * 1.5f, center = center,
+                        style = Stroke(width = 0.8.dp.toPx())
                     )
-                    // Thin ring
-                    drawCircle(
-                        color = AlfredGold.copy(alpha = 0.2f),
-                        radius = baseRadius * 1.4f * idleBreath,
-                        center = center,
-                        style = Stroke(width = 1.dp.toPx())
-                    )
+                    // Core
+                    drawCircle(brush = coreGradient, radius = r, center = center)
                 }
 
                 AssistantState.LISTENING -> {
-                    // Expanding pulse rings
-                    listOf(listenPulse1, listenPulse2, listenPulse3).forEach { pulse ->
-                        val ringRadius = baseRadius * (1f + pulse * 1.8f)
-                        val ringAlpha = (1f - pulse) * 0.5f
+                    val r = baseR * listenPulse
+                    // Ripple rings expanding outward
+                    listOf(ripple1, ripple2, ripple3).forEach { progress ->
+                        val ringR = r * (1.2f + progress * 1.6f)
+                        val alpha = (1f - progress) * 0.45f
+                        val width = (2.5f - progress * 2f).coerceAtLeast(0.3f)
                         drawCircle(
-                            color = AlfredRed.copy(alpha = ringAlpha),
-                            radius = ringRadius,
-                            center = center,
-                            style = Stroke(width = (2f - pulse * 1.5f).dp.toPx())
+                            color = AlfredGold.copy(alpha = alpha),
+                            radius = ringR, center = center,
+                            style = Stroke(width = width.dp.toPx())
                         )
                     }
-                    // Core — slightly larger, solid
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                AlfredRedGlow,
-                                AlfredRed,
-                                AlfredRed.copy(alpha = 0.7f)
-                            ),
-                            center = center,
-                            radius = baseRadius
-                        ),
-                        radius = baseRadius,
-                        center = center
-                    )
+                    // Core
+                    drawCircle(brush = coreGradient, radius = r, center = center)
                 }
 
                 AssistantState.PROCESSING -> {
+                    val r = baseR * 0.95f
                     // Glow
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(
-                                AlfredAmber.copy(alpha = 0.2f),
-                                Color.Transparent
-                            ),
-                            center = center,
-                            radius = baseRadius * 2f
+                            listOf(AlfredGold.copy(alpha = 0.15f), Color.Transparent),
+                            center = center, radius = r * 2.2f
                         ),
-                        radius = baseRadius * 2f,
-                        center = center
+                        radius = r * 2.2f, center = center
                     )
                     // Core
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(AlfredAmber, AlfredGoldDim),
-                            center = center,
-                            radius = baseRadius
-                        ),
-                        radius = baseRadius * 0.9f,
-                        center = center
-                    )
-                    // Rotating arc
-                    rotate(processRotation, pivot = center) {
+                    drawCircle(brush = coreGradient, radius = r, center = center)
+                    // Outer rotating arc
+                    val arcR = r * 1.5f
+                    val arcRect = Size(arcR * 2, arcR * 2)
+                    val arcTopLeft = Offset(cx - arcR, cy - arcR)
+                    rotate(procRot1, pivot = center) {
                         drawArc(
-                            color = AlfredAmber,
-                            startAngle = 0f,
-                            sweepAngle = processArc,
+                            color = AlfredGold.copy(alpha = 0.7f),
+                            startAngle = 0f, sweepAngle = procArc,
                             useCenter = false,
-                            topLeft = Offset(
-                                center.x - baseRadius * 1.4f,
-                                center.y - baseRadius * 1.4f
-                            ),
-                            size = androidx.compose.ui.geometry.Size(
-                                baseRadius * 2.8f,
-                                baseRadius * 2.8f
-                            ),
+                            topLeft = arcTopLeft, size = arcRect,
                             style = Stroke(width = 2.dp.toPx())
+                        )
+                    }
+                    // Inner counter-rotating arc
+                    val arcR2 = r * 1.25f
+                    val arcRect2 = Size(arcR2 * 2, arcR2 * 2)
+                    val arcTopLeft2 = Offset(cx - arcR2, cy - arcR2)
+                    rotate(procRot2, pivot = center) {
+                        drawArc(
+                            color = AlfredGoldLight.copy(alpha = 0.5f),
+                            startAngle = 0f, sweepAngle = procArc * 0.6f,
+                            useCenter = false,
+                            topLeft = arcTopLeft2, size = arcRect2,
+                            style = Stroke(width = 1.5.dp.toPx())
                         )
                     }
                 }
 
                 AssistantState.SPEAKING -> {
-                    val currentRadius = baseRadius * speakScale
-
+                    val r = baseR * speakScale
                     // Outer glow burst
                     drawCircle(
                         brush = Brush.radialGradient(
-                            colors = listOf(
+                            listOf(
                                 AlfredGold.copy(alpha = speakGlow),
-                                AlfredGold.copy(alpha = speakGlow * 0.3f),
+                                AlfredGold.copy(alpha = speakGlow * 0.2f),
                                 Color.Transparent
                             ),
-                            center = center,
-                            radius = currentRadius * 2.5f
+                            center = center, radius = r * 2.8f
                         ),
-                        radius = currentRadius * 2.5f,
-                        center = center
+                        radius = r * 2.8f, center = center
                     )
-                    // Undulating ring
-                    val ringPoints = 60
-                    val path = androidx.compose.ui.graphics.Path()
-                    for (i in 0..ringPoints) {
-                        val angle = (i.toFloat() / ringPoints) * 2f * Math.PI.toFloat()
-                        val wobble = 1f + sin((angle * 3f + speakRing).toDouble()).toFloat() * 0.08f
-                        val r = currentRadius * 1.5f * wobble
-                        val x = center.x + r * kotlin.math.cos(angle.toDouble()).toFloat()
-                        val y = center.y + r * sin(angle.toDouble()).toFloat()
-                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                    }
-                    path.close()
-                    drawPath(
-                        path = path,
-                        color = AlfredGold.copy(alpha = 0.4f),
-                        style = Stroke(width = 1.5.dp.toPx())
+                    // Wave ring 1 — fast, tight wobble
+                    drawWaveRing(
+                        cx = cx, cy = cy,
+                        radius = r * 1.45f,
+                        phase = speakPhase,
+                        waves = 5, amplitude = 0.12f,
+                        color = AlfredGold.copy(alpha = 0.5f),
+                        strokeWidth = 1.8f
                     )
-                    // Core orb
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                AlfredGoldLight,
-                                AlfredGold,
-                                AlfredGoldDim
-                            ),
-                            center = center,
-                            radius = currentRadius
-                        ),
-                        radius = currentRadius,
-                        center = center
+                    // Wave ring 2 — slower, wider wobble
+                    drawWaveRing(
+                        cx = cx, cy = cy,
+                        radius = r * 1.85f,
+                        phase = speakPhase2,
+                        waves = 4, amplitude = 0.1f,
+                        color = AlfredGoldLight.copy(alpha = 0.3f),
+                        strokeWidth = 1.2f
                     )
+                    // Wave ring 3 — outermost, subtle
+                    drawWaveRing(
+                        cx = cx, cy = cy,
+                        radius = r * 2.2f,
+                        phase = -speakPhase * 0.7f,
+                        waves = 6, amplitude = 0.06f,
+                        color = AlfredGold.copy(alpha = 0.15f),
+                        strokeWidth = 0.8f
+                    )
+                    // Core
+                    drawCircle(brush = coreGradient, radius = r, center = center)
                 }
             }
         }
     }
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawWaveRing(
+    cx: Float, cy: Float,
+    radius: Float, phase: Float,
+    waves: Int, amplitude: Float,
+    color: Color, strokeWidth: Float
+) {
+    val points = 80
+    val path = Path()
+    for (i in 0..points) {
+        val angle = (i.toFloat() / points) * 2f * Math.PI.toFloat()
+        val wobble = 1f + sin((angle * waves + phase).toDouble()).toFloat() * amplitude
+        val r = radius * wobble
+        val x = cx + r * cos(angle.toDouble()).toFloat()
+        val y = cy + r * sin(angle.toDouble()).toFloat()
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    path.close()
+    drawPath(path, color, style = Stroke(width = strokeWidth.dp.toPx()))
 }
