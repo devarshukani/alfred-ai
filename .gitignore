@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Sherpa-onnx native libs and model (downloaded by setup-sherpa-tts.sh)
+app/src/main/jniLibs/
+app/src/main/assets/vits-piper-*
+jniLibs/
+sherpa-onnx-android.tar.bz2
+vits-piper-*.tar.bz2

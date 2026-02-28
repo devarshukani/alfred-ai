@@ -8,8 +8,7 @@ import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
+import com.alfredassistant.alfred_ai.tts.SherpaOnnxTts
 import java.util.Locale
 
 class SpeechHelper(
@@ -22,11 +21,11 @@ class SpeechHelper(
     private val onAudioLevel: (Float) -> Unit = {}
 ) {
     private var speechRecognizer: SpeechRecognizer? = null
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
     private val handler = Handler(Looper.getMainLooper())
     private var isSpeaking = false
     private var speakingSimRunnable: Runnable? = null
+    private var sherpaTts: SherpaOnnxTts? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun init() {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
@@ -60,12 +59,8 @@ class SpeechHelper(
             override fun onEvent(eventType: Int, params: Bundle?) {}
         })
 
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.US
-                ttsReady = true
-            }
-        }
+        // Initialize sherpa-onnx TTS (British male voice — Alfred the butler)
+        sherpaTts = SherpaOnnxTts(context).also { it.init() }
     }
 
     fun startListening() {
@@ -115,32 +110,37 @@ class SpeechHelper(
     }
 
     fun speak(text: String) {
-        if (!ttsReady) {
+        val tts = sherpaTts
+        if (tts == null) {
             onError("TTS not ready")
             return
         }
-        tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                onSpeakingStarted()
-                handler.post { startSpeakingSimulation() }
-            }
-            override fun onDone(utteranceId: String?) {
-                handler.post { stopSpeakingSimulation() }
-                onSpeakingDone()
-            }
-            @Deprecated("Deprecated in Java")
-            override fun onError(utteranceId: String?) {
-                handler.post { stopSpeakingSimulation() }
-                onSpeakingDone()
-            }
-        })
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "alfred_response")
+        // sherpa-onnx generate+stream is blocking, run on background thread
+        Thread {
+            tts.speak(
+                text = text,
+                speakerId = 0, // speaker 0 of the southern_english_male model
+                speed = 1.0f,
+                onStart = {
+                    mainHandler.post {
+                        onSpeakingStarted()
+                        startSpeakingSimulation()
+                    }
+                },
+                onDone = {
+                    mainHandler.post {
+                        stopSpeakingSimulation()
+                        onSpeakingDone()
+                    }
+                },
+            )
+        }.start()
     }
 
     fun shutdown() {
         stopSpeakingSimulation()
         speechRecognizer?.destroy()
-        tts?.stop()
-        tts?.shutdown()
+        sherpaTts?.shutdown()
+        sherpaTts = null
     }
 }
