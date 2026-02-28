@@ -49,6 +49,12 @@ You have access to tools for:
 - Device Search: find and launch apps, search contacts, open specific system settings.
 - Web Search: search the web for information and summarize results, open URLs, open browser search.
   Use web_search to get information, then summarize it naturally for voice. If results are insufficient, use open_web_search to open the browser.
+- Weather: get current weather and 3-day forecast for any city. Summarize naturally.
+- Payments: launch payment apps (GPay, PhonePe, Paytm, PayPal, etc.), initiate UPI payments, list available payment apps.
+- Notifications: read recent notifications, filter by app, clear notifications. If listener not enabled, guide user to enable it.
+- Memory: remember facts and preferences the user tells you (e.g. "my name is...", "I prefer..."). 
+  Use remember_fact for things the user wants you to remember. Use recall_fact to look up stored info.
+  Use set_preference for user preferences. Always check memory when it might be relevant.
 
 When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
 When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds).
@@ -101,14 +107,26 @@ Today's date is provided in the conversation — use it to calculate correct dat
             makeRequest()
         }
 
+    private var memoryContext: String = ""
+
+    fun setMemoryContext(context: String) {
+        memoryContext = context
+    }
+
     private fun makeRequest(): ChatResult {
         val messages = JSONArray()
-        // Inject current date/time into system prompt
         val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm, EEEE", java.util.Locale.getDefault())
             .format(java.util.Date())
+        val systemMsg = buildString {
+            append(SYSTEM_PROMPT)
+            append("\n\nCurrent date and time: $now")
+            if (memoryContext.isNotBlank()) {
+                append("\n\n$memoryContext")
+            }
+        }
         messages.put(JSONObject().apply {
             put("role", "system")
-            put("content", "$SYSTEM_PROMPT\n\nCurrent date and time: $now")
+            put("content", systemMsg)
         })
         conversationHistory.forEach { messages.put(it) }
 
@@ -703,6 +721,227 @@ Today's date is provided in the conversation — use it to calculate correct dat
                         })
                     })
                     put("required", JSONArray().apply { put("url") })
+                })
+            })
+        })
+
+        // --- Weather ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_weather")
+                put("description", "Get current weather and 3-day forecast for a location. Returns temperature, conditions, humidity, wind, and daily forecast.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("location", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "City name (e.g. 'London', 'New York', 'Mumbai')")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("location") })
+                })
+            })
+        })
+
+        // --- Payments ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "launch_payment_app")
+                put("description", "Launch a payment app. Supported: GPay, Google Pay, PhonePe, Paytm, PayPal, Samsung Pay, Amazon Pay, CRED, BHIM, WhatsApp Pay.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("app_name", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Name of the payment app to launch")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("app_name") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "upi_payment")
+                put("description", "Initiate a UPI payment to a specific UPI ID.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("upi_id", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The recipient's UPI ID (e.g. name@upi)")
+                        })
+                        put("name", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Recipient name (optional)")
+                        })
+                        put("amount", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Amount to pay (optional)")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("upi_id") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "list_payment_apps")
+                put("description", "List payment apps installed on the device.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // --- Notifications ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_notifications")
+                put("description", "Get recent notifications from the device. Returns app name, title, text, and time.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("count", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "Number of notifications to return. Default 10.")
+                        })
+                    })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_app_notifications")
+                put("description", "Get notifications from a specific app (e.g. WhatsApp, Gmail).")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("app_name", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "App name to filter notifications by")
+                        })
+                        put("count", JSONObject().apply {
+                            put("type", "integer")
+                            put("description", "Number of notifications to return. Default 10.")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("app_name") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "clear_notifications")
+                put("description", "Clear all stored notification history.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        // --- Memory ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "remember_fact")
+                put("description", "Store a fact the user wants you to remember (e.g. 'my dog's name is Rex', 'my birthday is March 5'). Use a short key and the value.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("key", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Short key for the fact (e.g. 'dog_name', 'birthday')")
+                        })
+                        put("value", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The fact to remember")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("key"); put("value") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "recall_fact")
+                put("description", "Look up a previously stored fact.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("key", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The key of the fact to recall")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("key") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "get_all_memories")
+                put("description", "Get all stored facts and preferences.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject())
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "forget_fact")
+                put("description", "Delete a previously stored fact.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("key", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The key of the fact to forget")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("key") })
+                })
+            })
+        })
+
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "set_preference")
+                put("description", "Store a user preference (e.g. preferred language, temperature unit, nickname).")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("key", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Preference key (e.g. 'temperature_unit', 'nickname')")
+                        })
+                        put("value", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Preference value")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("key"); put("value") })
                 })
             })
         })

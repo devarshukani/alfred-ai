@@ -5,13 +5,14 @@ import com.alfredassistant.alfred_ai.features.alarm.AlarmAction
 import com.alfredassistant.alfred_ai.features.calculator.CalculatorAction
 import com.alfredassistant.alfred_ai.features.calendar.CalendarAction
 import com.alfredassistant.alfred_ai.features.mail.MailAction
+import com.alfredassistant.alfred_ai.features.memory.MemoryStore
+import com.alfredassistant.alfred_ai.features.notifications.NotificationAction
+import com.alfredassistant.alfred_ai.features.payments.PaymentAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
 import com.alfredassistant.alfred_ai.features.search.SearchAction
+import com.alfredassistant.alfred_ai.features.weather.WeatherAction
 
-/**
- * Alfred's brain — orchestrates Mistral API calls and executes tool actions.
- */
 class AlfredBrain(context: Context) {
 
     private val mistral = MistralClient()
@@ -21,25 +22,27 @@ class AlfredBrain(context: Context) {
     private val calendarAction = CalendarAction(context)
     private val mailAction = MailAction(context)
     private val searchAction = SearchAction(context)
+    private val weatherAction = WeatherAction()
+    private val paymentAction = PaymentAction(context)
+    private val notificationAction = NotificationAction(context)
+    private val memoryStore = MemoryStore(context)
 
     suspend fun processInput(userSpeech: String): String {
+        // Inject memory context into system prompt
+        mistral.setMemoryContext(memoryStore.getMemoryContext())
+
         var result = mistral.chat(userSpeech)
 
-        // Tool call loop — keep executing until we get a text response
-        var maxIterations = 5
+        var maxIterations = 8
         while (result.toolCalls.isNotEmpty() && maxIterations > 0) {
             maxIterations--
-
             val toolResults = result.toolCalls.map { call ->
-                val output = executeToolCall(call)
-                Pair(call.id, output)
+                Pair(call.id, executeToolCall(call))
             }
-
             result = mistral.sendToolResults(toolResults)
         }
 
-        return result.content
-            ?: "I've completed the action, sir."
+        return result.content ?: "I've completed the action, sir."
     }
 
     private suspend fun executeToolCall(call: ToolCall): String {
@@ -47,9 +50,9 @@ class AlfredBrain(context: Context) {
             when (call.functionName) {
                 // --- Phone ---
                 "search_contacts" -> {
-                    val query = call.arguments.getString("query")
-                    val contacts = phoneAction.searchContacts(query)
-                    if (contacts.isEmpty()) "No contacts found matching \"$query\"."
+                    val q = call.arguments.getString("query")
+                    val contacts = phoneAction.searchContacts(q)
+                    if (contacts.isEmpty()) "No contacts found matching \"$q\"."
                     else contacts.toJsonString()
                 }
                 "make_call" -> {
@@ -63,144 +66,121 @@ class AlfredBrain(context: Context) {
 
                 // --- Alarm ---
                 "set_alarm" -> {
-                    val hour = call.arguments.getInt("hour")
-                    val minute = call.arguments.getInt("minute")
-                    val message = call.arguments.optString("message", null)
-                    val vibrate = call.arguments.optBoolean("vibrate", true)
+                    val h = call.arguments.getInt("hour")
+                    val m = call.arguments.getInt("minute")
+                    val msg = call.arguments.optString("message", null)
+                    val vib = call.arguments.optBoolean("vibrate", true)
                     val daysArr = call.arguments.optJSONArray("days")
                     val days = mutableListOf<Int>()
-                    if (daysArr != null) {
-                        for (i in 0 until daysArr.length()) {
-                            days.add(daysArr.getInt(i))
-                        }
-                    }
-                    alarmAction.setAlarm(hour, minute, message, days, vibrate)
-                    val timeStr = String.format("%02d:%02d", hour, minute)
-                    if (days.isEmpty()) "Alarm set for $timeStr."
-                    else "Recurring alarm set for $timeStr."
+                    if (daysArr != null) for (i in 0 until daysArr.length()) days.add(daysArr.getInt(i))
+                    alarmAction.setAlarm(h, m, msg, days, vib)
+                    val t = String.format("%02d:%02d", h, m)
+                    if (days.isEmpty()) "Alarm set for $t." else "Recurring alarm set for $t."
                 }
-                "dismiss_alarm" -> {
-                    alarmAction.dismissAlarm()
-                    "Alarm dismissed."
-                }
+                "dismiss_alarm" -> { alarmAction.dismissAlarm(); "Alarm dismissed." }
                 "snooze_alarm" -> {
-                    val mins = if (call.arguments.has("snooze_minutes"))
-                        call.arguments.getInt("snooze_minutes") else null
-                    alarmAction.snoozeAlarm(mins)
-                    "Alarm snoozed."
+                    val mins = if (call.arguments.has("snooze_minutes")) call.arguments.getInt("snooze_minutes") else null
+                    alarmAction.snoozeAlarm(mins); "Alarm snoozed."
                 }
-                "show_alarms" -> {
-                    alarmAction.showAlarms()
-                    "Showing all alarms."
-                }
-
-                // --- Timer ---
+                "show_alarms" -> { alarmAction.showAlarms(); "Showing alarms." }
                 "set_timer" -> {
-                    val seconds = call.arguments.getInt("seconds")
-                    val message = call.arguments.optString("message", null)
-                    alarmAction.setTimer(seconds, message)
-                    val mins = seconds / 60
-                    val secs = seconds % 60
-                    val timeStr = if (mins > 0 && secs > 0) "$mins minutes and $secs seconds"
-                        else if (mins > 0) "$mins minutes"
-                        else "$secs seconds"
-                    "Timer set for $timeStr."
+                    val sec = call.arguments.getInt("seconds")
+                    alarmAction.setTimer(sec, call.arguments.optString("message", null))
+                    val mins = sec / 60; val secs = sec % 60
+                    val t = if (mins > 0 && secs > 0) "$mins min $secs sec" else if (mins > 0) "$mins min" else "$secs sec"
+                    "Timer set for $t."
                 }
-                "show_timers" -> {
-                    alarmAction.showTimers()
-                    "Showing timers."
-                }
-
-                // --- Stopwatch ---
-                "start_stopwatch" -> {
-                    alarmAction.startStopwatch()
-                    "Stopwatch started."
-                }
+                "show_timers" -> { alarmAction.showTimers(); "Showing timers." }
+                "start_stopwatch" -> { alarmAction.startStopwatch(); "Stopwatch started." }
 
                 // --- Calculator ---
-                "evaluate_expression" -> {
-                    val expr = call.arguments.getString("expression")
-                    val result = calculatorAction.evaluate(expr)
-                    "Result: $result"
-                }
-                "convert_unit" -> {
-                    val value = call.arguments.getDouble("value")
-                    val from = call.arguments.getString("from_unit")
-                    val to = call.arguments.getString("to_unit")
-                    calculatorAction.convertUnit(value, from, to)
-                }
+                "evaluate_expression" -> "Result: ${calculatorAction.evaluate(call.arguments.getString("expression"))}"
+                "convert_unit" -> calculatorAction.convertUnit(
+                    call.arguments.getDouble("value"),
+                    call.arguments.getString("from_unit"),
+                    call.arguments.getString("to_unit")
+                )
 
                 // --- Calendar ---
                 "create_calendar_event" -> {
                     val title = call.arguments.getString("title")
-                    val startStr = call.arguments.getString("start_datetime")
-                    val endStr = call.arguments.getString("end_datetime")
-                    val desc = call.arguments.optString("description", null)
-                    val location = call.arguments.optString("location", null)
-                    val allDay = call.arguments.optBoolean("all_day", false)
-                    val startMillis = calendarAction.parseDateTime(startStr)
-                    val endMillis = calendarAction.parseDateTime(endStr)
-                    calendarAction.createEvent(title, startMillis, endMillis, desc, location, allDay)
-                    "Calendar event '$title' created."
+                    val start = calendarAction.parseDateTime(call.arguments.getString("start_datetime"))
+                    val end = calendarAction.parseDateTime(call.arguments.getString("end_datetime"))
+                    calendarAction.createEvent(title, start, end,
+                        call.arguments.optString("description", null),
+                        call.arguments.optString("location", null),
+                        call.arguments.optBoolean("all_day", false))
+                    "Event '$title' created."
                 }
-                "get_today_events" -> {
-                    calendarAction.getTodayEvents()
-                }
-                "get_tomorrow_events" -> {
-                    calendarAction.getTomorrowEvents()
-                }
-                "get_week_events" -> {
-                    calendarAction.getWeekEvents()
-                }
-                "open_calendar" -> {
-                    calendarAction.openCalendar()
-                    "Calendar opened."
-                }
+                "get_today_events" -> calendarAction.getTodayEvents()
+                "get_tomorrow_events" -> calendarAction.getTomorrowEvents()
+                "get_week_events" -> calendarAction.getWeekEvents()
+                "open_calendar" -> { calendarAction.openCalendar(); "Calendar opened." }
 
                 // --- Mail ---
                 "compose_email" -> {
-                    val to = call.arguments.getString("to")
-                    val subject = call.arguments.getString("subject")
-                    val body = call.arguments.getString("body")
-                    val cc = call.arguments.optString("cc", null)
-                    val bcc = call.arguments.optString("bcc", null)
-                    mailAction.composeEmail(to, subject, body, cc, bcc)
-                    "Email composed to $to. Please review and send."
+                    mailAction.composeEmail(
+                        call.arguments.getString("to"),
+                        call.arguments.getString("subject"),
+                        call.arguments.getString("body"),
+                        call.arguments.optString("cc", null),
+                        call.arguments.optString("bcc", null))
+                    "Email composed. Please review and send."
                 }
-                "open_mail" -> {
-                    mailAction.openMail()
-                    "Mail app opened."
-                }
+                "open_mail" -> { mailAction.openMail(); "Mail opened." }
                 "share_via_email" -> {
-                    val subject = call.arguments.getString("subject")
-                    val body = call.arguments.getString("body")
-                    mailAction.shareViaEmail(subject, body)
+                    mailAction.shareViaEmail(call.arguments.getString("subject"), call.arguments.getString("body"))
                     "Share sheet opened."
                 }
 
                 // --- Device Search ---
-                "search_apps" -> {
-                    searchAction.searchApps(call.arguments.getString("query"))
-                }
-                "launch_app" -> {
-                    searchAction.launchApp(call.arguments.getString("package_name"))
-                }
-                "open_settings" -> {
-                    searchAction.openSettings(call.arguments.getString("settings_type"))
-                }
+                "search_apps" -> searchAction.searchApps(call.arguments.getString("query"))
+                "launch_app" -> searchAction.launchApp(call.arguments.getString("package_name"))
+                "open_settings" -> searchAction.openSettings(call.arguments.getString("settings_type"))
 
                 // --- Web Search ---
-                "web_search" -> {
-                    searchAction.webSearch(call.arguments.getString("query"))
+                "web_search" -> searchAction.webSearch(call.arguments.getString("query"))
+                "open_web_search" -> { searchAction.openWebSearch(call.arguments.getString("query")); "Browser opened." }
+                "open_url" -> { searchAction.openUrl(call.arguments.getString("url")); "URL opened." }
+
+                // --- Weather ---
+                "get_weather" -> weatherAction.getWeather(call.arguments.getString("location"))
+
+                // --- Payments ---
+                "launch_payment_app" -> paymentAction.launchPaymentApp(call.arguments.getString("app_name"))
+                "upi_payment" -> paymentAction.openUpiPayment(
+                    call.arguments.getString("upi_id"),
+                    call.arguments.optString("name", null),
+                    call.arguments.optString("amount", null))
+                "list_payment_apps" -> paymentAction.listAvailablePaymentApps()
+
+                // --- Notifications ---
+                "get_notifications" -> {
+                    if (!notificationAction.isListenerEnabled()) {
+                        notificationAction.openListenerSettings()
+                        "Notification access is required. I've opened the settings — please enable Alfred."
+                    } else {
+                        notificationAction.getRecentNotifications(call.arguments.optInt("count", 10))
+                    }
                 }
-                "open_web_search" -> {
-                    searchAction.openWebSearch(call.arguments.getString("query"))
-                    "Web search opened in browser."
+                "get_app_notifications" -> {
+                    if (!notificationAction.isListenerEnabled()) {
+                        notificationAction.openListenerSettings()
+                        "Notification access is required. I've opened the settings — please enable Alfred."
+                    } else {
+                        notificationAction.getNotificationsFromApp(
+                            call.arguments.getString("app_name"),
+                            call.arguments.optInt("count", 10))
+                    }
                 }
-                "open_url" -> {
-                    searchAction.openUrl(call.arguments.getString("url"))
-                    "URL opened in browser."
-                }
+                "clear_notifications" -> notificationAction.clearNotifications()
+
+                // --- Memory ---
+                "remember_fact" -> memoryStore.rememberFact(call.arguments.getString("key"), call.arguments.getString("value"))
+                "recall_fact" -> memoryStore.recallFact(call.arguments.getString("key"))
+                "get_all_memories" -> memoryStore.getAllFacts() + "\n" + memoryStore.getAllPreferences()
+                "forget_fact" -> memoryStore.forgetFact(call.arguments.getString("key"))
+                "set_preference" -> memoryStore.setPreference(call.arguments.getString("key"), call.arguments.getString("value"))
 
                 else -> "Unknown function: ${call.functionName}"
             }

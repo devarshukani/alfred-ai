@@ -30,16 +30,16 @@
 - [x] **Calculation** — Math expressions (+,-,*,/,^,%), unit conversions (length, weight, temp, volume, speed, area)
 - [x] **Calendar** — Create events (with title, time, location, description, all-day), check today/tomorrow/week schedule, open calendar
 
-## Phase 3 — Communication & Search (In Progress)
+## Phase 3 — Communication & Search ✅
 - [x] **Mail** — Compose emails (to, subject, body, cc, bcc), open mail app, share via email
 - [x] **Search (Device)** — Find and launch apps, search contacts, open specific system settings (wifi, bluetooth, display, sound, battery, storage, location, etc.)
 - [x] **Search (Web)** — Web search via DuckDuckGo (no API key needed), summarize results via voice, open browser search, open URLs
 
-## Phase 4 — Advanced Features
-- [ ] **Weather** — Current conditions, forecasts (API integration)
-- [ ] **Activity Launch (Payment)** — Open payment apps (GPay, etc.)
-- [ ] **Notification Listening** — Read, summarize, act on notifications
-- [ ] **Memory / Knowledge Graph** — On-device persistent memory, user preferences, learned context
+## Phase 4 — Advanced Features ✅
+- [x] **Weather** — Current conditions + 3-day forecast via Open-Meteo API (free, no key needed), any city worldwide
+- [x] **Activity Launch (Payment)** — Launch GPay, PhonePe, Paytm, PayPal, Samsung Pay, CRED, BHIM, etc. + UPI direct payments + list installed payment apps
+- [x] **Notification Listening** — Read recent notifications, filter by app, clear history. Uses NotificationListenerService with permission flow.
+- [x] **Memory / Knowledge Graph** — On-device persistent memory via SharedPreferences. Remember facts, recall them, set preferences. Memory is injected into system prompt so Alfred always knows what it remembers.
 
 ---
 
