@@ -46,6 +46,9 @@ You have access to tools for:
 - Mail: compose emails (with to, subject, body, optional cc/bcc), open mail app.
   When composing, confirm the recipient and content with the user before sending.
   If the user doesn't provide an email address, search their contacts first to find it.
+- Device Search: find and launch apps, search contacts, open specific system settings.
+- Web Search: search the web for information and summarize results, open URLs, open browser search.
+  Use web_search to get information, then summarize it naturally for voice. If results are insufficient, use open_web_search to open the browser.
 
 When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
 When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds).
@@ -584,6 +587,122 @@ Today's date is provided in the conversation — use it to calculate correct dat
                     put("required", JSONArray().apply {
                         put("subject"); put("body")
                     })
+                })
+            })
+        })
+
+        // --- Device Search ---
+        // search_apps
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "search_apps")
+                put("description", "Search installed apps by name. Returns app names and package names.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("query", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "App name or partial name to search for")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("query") })
+                })
+            })
+        })
+
+        // launch_app
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "launch_app")
+                put("description", "Launch an app by its package name. Use search_apps first to find the package name.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("package_name", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The package name of the app to launch")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("package_name") })
+                })
+            })
+        })
+
+        // open_settings
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_settings")
+                put("description", "Open a specific system settings page. Supported: wifi, bluetooth, display, sound, battery, storage, apps, location, security, accessibility, date, language, developer, nfc, notifications. Use 'general' for main settings.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("settings_type", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The type of settings to open (e.g. wifi, bluetooth, display)")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("settings_type") })
+                })
+            })
+        })
+
+        // --- Web Search ---
+        // web_search
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "web_search")
+                put("description", "Search the web for information. Returns text snippets that can be summarized for the user. Use this for factual questions, current events, definitions, etc.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("query", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The search query")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("query") })
+                })
+            })
+        })
+
+        // open_web_search
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_web_search")
+                put("description", "Open a web search in the browser for the user to browse results themselves.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("query", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The search query")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("query") })
+                })
+            })
+        })
+
+        // open_url
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_url")
+                put("description", "Open a specific URL in the browser.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("url", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The URL to open")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("url") })
                 })
             })
         })

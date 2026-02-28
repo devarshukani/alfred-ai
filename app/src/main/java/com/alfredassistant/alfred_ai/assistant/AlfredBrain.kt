@@ -7,6 +7,7 @@ import com.alfredassistant.alfred_ai.features.calendar.CalendarAction
 import com.alfredassistant.alfred_ai.features.mail.MailAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
+import com.alfredassistant.alfred_ai.features.search.SearchAction
 
 /**
  * Alfred's brain — orchestrates Mistral API calls and executes tool actions.
@@ -19,6 +20,7 @@ class AlfredBrain(context: Context) {
     private val calculatorAction = CalculatorAction()
     private val calendarAction = CalendarAction(context)
     private val mailAction = MailAction(context)
+    private val searchAction = SearchAction(context)
 
     suspend fun processInput(userSpeech: String): String {
         var result = mistral.chat(userSpeech)
@@ -40,7 +42,7 @@ class AlfredBrain(context: Context) {
             ?: "I've completed the action, sir."
     }
 
-    private fun executeToolCall(call: ToolCall): String {
+    private suspend fun executeToolCall(call: ToolCall): String {
         return try {
             when (call.functionName) {
                 // --- Phone ---
@@ -174,6 +176,30 @@ class AlfredBrain(context: Context) {
                     val body = call.arguments.getString("body")
                     mailAction.shareViaEmail(subject, body)
                     "Share sheet opened."
+                }
+
+                // --- Device Search ---
+                "search_apps" -> {
+                    searchAction.searchApps(call.arguments.getString("query"))
+                }
+                "launch_app" -> {
+                    searchAction.launchApp(call.arguments.getString("package_name"))
+                }
+                "open_settings" -> {
+                    searchAction.openSettings(call.arguments.getString("settings_type"))
+                }
+
+                // --- Web Search ---
+                "web_search" -> {
+                    searchAction.webSearch(call.arguments.getString("query"))
+                }
+                "open_web_search" -> {
+                    searchAction.openWebSearch(call.arguments.getString("query"))
+                    "Web search opened in browser."
+                }
+                "open_url" -> {
+                    searchAction.openUrl(call.arguments.getString("url"))
+                    "URL opened in browser."
                 }
 
                 else -> "Unknown function: ${call.functionName}"

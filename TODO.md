@@ -32,8 +32,8 @@
 
 ## Phase 3 — Communication & Search (In Progress)
 - [x] **Mail** — Compose emails (to, subject, body, cc, bcc), open mail app, share via email
-- [ ] **Search (Device)** — Find apps, contacts, files, settings
-- [ ] **Search (Web)** — Web search and summarize results
+- [x] **Search (Device)** — Find and launch apps, search contacts, open specific system settings (wifi, bluetooth, display, sound, battery, storage, location, etc.)
+- [x] **Search (Web)** — Web search via DuckDuckGo (no API key needed), summarize results via voice, open browser search, open URLs
 
 ## Phase 4 — Advanced Features
 - [ ] **Weather** — Current conditions, forecasts (API integration)
