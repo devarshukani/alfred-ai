@@ -19,3 +19,22 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ── Sherpa-onnx (JNI native bridge) ──
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+
+# ── ONNX Runtime (JNI native bridge) ──
+-keep class ai.onnxruntime.** { *; }
+
+# ── ObjectBox ──
+-keep class io.objectbox.** { *; }
+-keep class com.alfredassistant.alfred_ai.db.** { *; }
+
+# ── OkHttp ──
+-dontwarn okhttp3.**
+-dontwarn okio.**
+-keep class okhttp3.** { *; }
+
+# ── Keep Kotlin metadata for serialization ──
+-keepattributes *Annotation*
+-keepattributes RuntimeVisibleAnnotations

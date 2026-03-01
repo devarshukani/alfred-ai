@@ -38,6 +38,12 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        // Only ship arm64 — covers all modern Android phones.
+        // Drops ~90 MB of unused native libs (x86, x86_64, armeabi-v7a).
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         // Read Mistral API key from local.properties
         val localProps = project.rootProject.file("local.properties")
         val props = Properties()
@@ -50,7 +56,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
