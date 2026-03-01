@@ -77,11 +77,11 @@ fun WaveAssistantScreen(
                 onShowConfirmation = {
                     debugState = AssistantState.AWAITING_CONFIRMATION
                     debugConfirmation = ConfirmationRequest(
-                        prompt = "I found three contacts for \"mom\". Which one should I call?",
+                        prompt = "I found three contacts for \"mom\". Which one should I call?\n\n1. Mom — +91REDACTED\n2. Rehanatik Shaikh Mom — +918829209160\n3. Sukhmeet Bawa Mom — +91REDACTED",
                         options = listOf(
-                            "Mom: +91REDACTED",
-                            "Rehanatik Shaikh Mom: +918829209160",
-                            "Sukhmeet Bawa Mom: +91REDACTED",
+                            "Call Mom",
+                            "Rehanatik Shaikh",
+                            "Sukhmeet Bawa",
                             "Cancel"
                         ),
                         buttonStyles = listOf("primary", "primary", "primary", "cancel")

@@ -44,13 +44,15 @@ IMPORTANT — CONFIRMATION RULE:
 You have a tool called present_options. You MUST use it to confirm with the user BEFORE executing any action that is irreversible or significant. The user sees clickable buttons and can also speak their choice. Max 4 options. Always include a "Cancel" option.
 
 Use present_options in these situations:
-1. PHONE CALLS: Before calling, show options like ["Call Mobile: +1234", "Call Work: +5678", "Cancel"]. If only one number, still confirm: ["Call John at +1234", "Cancel"].
-2. CALENDAR EVENTS: Before creating an event, summarize it and confirm: ["Create event", "Change time", "Cancel"]. 
-3. EMAIL: Before composing, confirm recipient and subject: ["Send to john@email.com", "Change recipient", "Cancel"].
-4. PAYMENTS: Before initiating any payment or launching a payment app, confirm: ["Pay ₹500 via GPay", "Change amount", "Cancel"]. For UPI payments always confirm amount and recipient.
-5. MULTIPLE CONTACTS: When search returns multiple contacts, show them as options: ["John Smith", "John Doe", "Cancel"].
+1. PHONE CALLS: Before calling, show options like ["Call Mobile", "Call Work", "Cancel"]. If only one number, still confirm: ["Call John", "Cancel"]. Put the phone number in the prompt, NOT in the button label.
+2. CALENDAR EVENTS: Before creating an event, summarize it in the prompt and confirm: ["Create event", "Change time", "Cancel"]. 
+3. EMAIL: Before composing, confirm in the prompt and use short buttons: ["Send email", "Change recipient", "Cancel"].
+4. PAYMENTS: Before initiating any payment, describe details in the prompt: ["Pay now", "Change amount", "Cancel"].
+5. MULTIPLE CONTACTS: When search returns multiple contacts, use just names as options: ["John Smith", "John Doe", "Cancel"]. Put numbers in the prompt.
 6. AMBIGUOUS REQUESTS: When the user's intent is unclear between 2-4 interpretations, present the options.
-7. ALARMS: For recurring alarms or unusual times, confirm: ["Set alarm for 5:30 AM weekdays", "Change time", "Cancel"].
+7. ALARMS: For recurring alarms or unusual times, confirm: ["Set alarm", "Change time", "Cancel"]. Put the time details in the prompt.
+
+CRITICAL: Option button labels MUST be very short (max 25 characters). Put all details (phone numbers, times, addresses) in the prompt text, NOT in button labels.
 
 Do NOT use present_options for:
 - Simple information queries (weather, web search, notifications, calculator)
@@ -999,7 +1001,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
                         put("options", JSONObject().apply {
                             put("type", "array")
                             put("items", JSONObject().apply { put("type", "string") })
-                            put("description", "List of option labels (max 4). Keep them short and clear.")
+                            put("description", "List of option labels (max 4). MUST be very short — max 25 characters each. Use just a name or brief label like 'Call Mom' or 'John Smith', never full phone numbers or long descriptions. Put details in the prompt instead.")
                             put("maxItems", 4)
                         })
                         put("button_styles", JSONObject().apply {
