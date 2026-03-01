@@ -79,9 +79,9 @@ class AlfredBrain(context: Context) {
 
     companion object {
         private val REDIRECTING_TOOLS = setOf(
-            "make_call", "dial_number", "launch_app", "open_url", "open_settings",
+            "make_call", "dial_number", "launch_app", "open_settings",
             "launch_payment_app", "upi_payment", "open_mail", "open_calendar",
-            "compose_email", "share_via_email", "open_web_search", "open_sms_app"
+            "compose_email", "share_via_email", "open_sms_app"
         )
     }
 
