@@ -202,14 +202,19 @@ class AlfredBrain(context: Context) {
                 "present_options" -> {
                     val prompt = call.arguments.getString("prompt")
                     val optionsArr = call.arguments.getJSONArray("options")
+                    val stylesArr = call.arguments.optJSONArray("button_styles")
                     val options = mutableListOf<String>()
+                    val styles = mutableListOf<String>()
                     for (i in 0 until minOf(optionsArr.length(), 4)) {
                         options.add(optionsArr.getString(i))
+                        styles.add(stylesArr?.optString(i, "primary") ?: "primary")
                     }
                     // Show options to user and suspend until they pick one
                     val deferred = CompletableDeferred<String>()
                     pendingSelection = deferred
-                    onConfirmationNeeded?.invoke(ConfirmationRequest(prompt, options))
+                    onConfirmationNeeded?.invoke(
+                        ConfirmationRequest(prompt, options, styles)
+                    )
                     val selection = deferred.await()
                     pendingSelection = null
                     if (selection.equals("Cancel", ignoreCase = true)) {

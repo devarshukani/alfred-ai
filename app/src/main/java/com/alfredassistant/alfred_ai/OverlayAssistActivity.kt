@@ -2,6 +2,7 @@ package com.alfredassistant.alfred_ai
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
@@ -45,6 +46,15 @@ class OverlayAssistActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        // Enable real background blur on Android 12+ for frosted glass effect
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.setBackgroundBlurRadius(60)
+            window.attributes = window.attributes.also {
+                it.blurBehindRadius = 60
+            }
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+        }
 
         brain = AlfredBrain(this)
 
