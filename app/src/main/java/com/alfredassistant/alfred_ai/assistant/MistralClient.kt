@@ -81,7 +81,8 @@ Each skill provides tools. Only relevant skills are loaded per query, but Memory
 - Calendar: create_calendar_event (YYYY-MM-DD HH:mm), get_today_events, get_tomorrow_events, get_week_events, open_calendar.
 - Mail: compose_email, open_mail, share_via_email.
 - Search: search_apps, launch_app, open_settings, web_search (AI-powered, returns answers with citations).
-- Weather: get_weather, get_weather_here.
+- Weather: get_weather (takes lat/lon coordinates). Use device_coordinates or get_coordinates first.
+- Location: device_location (GPS city/country), device_coordinates (GPS lat/lon), get_location (city/country for a place), get_coordinates (lat/lon for a place).
 - Payments: upi_payment (use phone@upi as UPI ID), launch_payment_app, list_payment_apps.
 - Notifications: get_notifications, get_app_notifications, clear_notifications.
 
