@@ -104,13 +104,16 @@ class SpeechHelper(
         // Stop recognizer so we don't pick up our own TTS
         speechRecognizer?.stopListening()
 
+        // Strip any markdown that the LLM might have snuck in
+        val cleanText = stripMarkdown(text)
+
         if (SherpaOnnxTts.tts == null) {
             onError("TTS not ready")
             return
         }
         Thread {
             SherpaOnnxTts.speak(
-                text = text,
+                text = cleanText,
                 speakerId = 0,
                 speed = 1.0f,
                 onStart = {
@@ -127,6 +130,23 @@ class SpeechHelper(
                 },
             )
         }.start()
+    }
+
+    /**
+     * Strip markdown formatting characters that sound bad when read aloud.
+     */
+    private fun stripMarkdown(text: String): String {
+        return text
+            .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")  // **bold**
+            .replace(Regex("\\*(.+?)\\*"), "$1")          // *italic*
+            .replace(Regex("__(.+?)__"), "$1")            // __bold__
+            .replace(Regex("_(.+?)_"), "$1")              // _italic_
+            .replace(Regex("```[\\s\\S]*?```"), "")       // code blocks
+            .replace(Regex("`(.+?)`"), "$1")              // inline code
+            .replace(Regex("^#{1,6}\\s+", RegexOption.MULTILINE), "") // headers
+            .replace(Regex("^[\\-*]\\s+", RegexOption.MULTILINE), "") // bullet points
+            .replace(Regex("^\\d+\\.\\s+", RegexOption.MULTILINE), "") // numbered lists
+            .trim()
     }
 
     /**
