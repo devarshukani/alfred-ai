@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 import com.alfredassistant.alfred_ai.db.ObjectBoxStore
+import com.alfredassistant.alfred_ai.models.ModelDownloader
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
@@ -29,8 +30,15 @@ import kotlinx.coroutines.launch
 class CoverWaveActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
-    private lateinit var brain: AlfredBrain
+    private var brain: AlfredBrain? = null
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    private fun getOrCreateBrain(): AlfredBrain {
+        if (brain == null) {
+            brain = AlfredBrain(this)
+        }
+        return brain!!
+    }
 
     override fun finish() {
         if (::speechHelper.isInitialized) speechHelper.stopGracefully()
@@ -63,7 +71,15 @@ class CoverWaveActivity : ComponentActivity() {
         )
 
         ObjectBoxStore.init(this)
-        brain = AlfredBrain(this)
+
+        // Models must be downloaded during onboarding first
+        if (!ModelDownloader.isComplete(this)) {
+            Toast.makeText(this, "Please complete setup in the Alfred app first", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        val brain = getOrCreateBrain()
 
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()

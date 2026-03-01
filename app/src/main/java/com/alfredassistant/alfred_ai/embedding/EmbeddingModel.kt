@@ -5,6 +5,8 @@ import android.util.Log
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import com.alfredassistant.alfred_ai.models.ModelDownloader
+import java.io.File
 import java.nio.LongBuffer
 import kotlin.math.sqrt
 
@@ -12,17 +14,15 @@ import kotlin.math.sqrt
  * On-device text embedding using all-MiniLM-L6-v2 ONNX model.
  * Produces 384-dimensional embeddings for semantic similarity search.
  *
- * Required assets (downloaded by setup-models.sh):
- *   assets/models/embedding/model.onnx
- *   assets/models/embedding/vocab.txt
+ * Model files are downloaded during onboarding to:
+ *   getExternalFilesDir/models/embedding/model.onnx
+ *   getExternalFilesDir/models/embedding/vocab.txt
  */
 class EmbeddingModel(private val context: Context) {
 
     companion object {
         private const val TAG = "EmbeddingModel"
         const val DIMENSIONS = 384
-        private const val MODEL_PATH = "models/embedding/model.onnx"
-        private const val VOCAB_PATH = "models/embedding/vocab.txt"
         private const val MAX_SEQ_LENGTH = 128
     }
 
@@ -38,10 +38,18 @@ class EmbeddingModel(private val context: Context) {
     @Synchronized
     fun initialize() {
         if (initialized) return
-        val modelBytes = context.assets.open(MODEL_PATH).use { it.readBytes() }
+        val embDir = ModelDownloader.getEmbeddingDir(context)
+        val modelFile = File(embDir, "model.onnx")
+        val vocabFile = File(embDir, "vocab.txt")
+
+        if (!modelFile.exists() || !vocabFile.exists()) {
+            throw IllegalStateException("Embedding model files not found in ${embDir.absolutePath}. Run model download first.")
+        }
+
+        val modelBytes = modelFile.readBytes()
         ortEnv = OrtEnvironment.getEnvironment()
         ortSession = ortEnv.createSession(modelBytes)
-        val vocabLines = context.assets.open(VOCAB_PATH).bufferedReader().readLines()
+        val vocabLines = vocabFile.readLines()
         vocab = vocabLines.withIndex().associate { (i, token) -> token to i }
         initialized = true
         Log.i(TAG, "ONNX embedding model loaded (${vocabLines.size} vocab tokens)")

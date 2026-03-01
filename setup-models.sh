@@ -4,6 +4,11 @@
 #   models/embedding/model.onnx, vocab.txt
 #   Sherpa-onnx AAR (native libs)
 #
+# NOTE: The large ONNX models (tts/model.onnx, embedding/model.onnx, embedding/vocab.txt)
+# are downloaded at runtime during onboarding. They do NOT need to be in assets for production.
+# This script is only needed for local development/testing.
+# The small files (tokens.txt, espeak-ng-data/) MUST remain in assets.
+#
 # Run once before building. To swap TTS voice, change TTS_MODEL below.
 
 set -e

@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 import com.alfredassistant.alfred_ai.db.ObjectBoxStore
+import com.alfredassistant.alfred_ai.models.ModelDownloader
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
@@ -30,8 +31,16 @@ import kotlinx.coroutines.launch
 class OverlayAssistActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
-    private lateinit var brain: AlfredBrain
+    private var brain: AlfredBrain? = null
     private val scope = CoroutineScope(Dispatchers.Main)
+
+    /** Create brain lazily — only after models are downloaded */
+    private fun getOrCreateBrain(): AlfredBrain {
+        if (brain == null) {
+            brain = AlfredBrain(this)
+        }
+        return brain!!
+    }
 
     override fun finish() {
         if (::speechHelper.isInitialized) {
@@ -66,8 +75,6 @@ class OverlayAssistActivity : ComponentActivity() {
         // Initialize ObjectBox before anything that depends on it
         ObjectBoxStore.init(this)
 
-        brain = AlfredBrain(this)
-
         // Track granted permissions reactively for onboarding
         val grantedPermissions = mutableStateOf(getCurrentGrantedPermissions())
 
@@ -90,7 +97,10 @@ class OverlayAssistActivity : ComponentActivity() {
         setContent {
             AlfredaiTheme {
                 var onboardingDone by remember {
-                    mutableStateOf(prefs.getBoolean("onboarding_complete", false))
+                    mutableStateOf(
+                        prefs.getBoolean("onboarding_complete", false)
+                                && ModelDownloader.isComplete(this@OverlayAssistActivity)
+                    )
                 }
                 val granted by grantedPermissions
 
@@ -119,7 +129,7 @@ class OverlayAssistActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        AssistantContent(brain = brain)
+                        AssistantContent(brain = getOrCreateBrain())
                     }
                 }
             }
