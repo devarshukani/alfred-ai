@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alfredassistant.alfred_ai.ui.theme.*
@@ -84,14 +85,16 @@ private fun PrimaryPill(label: String, onClick: () -> Unit) {
             .background(Color.White.copy(alpha = 0.14f))
             .border(0.5.dp, Color.White.copy(alpha = 0.20f), PillShape)
             .clickable { onClick() }
-            .padding(vertical = 13.dp, horizontal = 20.dp)
+            .padding(vertical = 12.dp, horizontal = 20.dp)
     ) {
         Text(
             text = label,
             color = AlfredTextPrimary,
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -105,14 +108,16 @@ private fun SecondaryPill(label: String, onClick: () -> Unit) {
             .clip(PillShape)
             .background(Color.White.copy(alpha = 0.06f))
             .clickable { onClick() }
-            .padding(vertical = 13.dp, horizontal = 20.dp)
+            .padding(vertical = 12.dp, horizontal = 20.dp)
     ) {
         Text(
             text = label,
             color = AlfredTextSecondary,
             fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -124,14 +129,16 @@ private fun CancelText(label: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(vertical = 13.dp, horizontal = 20.dp)
+            .padding(vertical = 12.dp, horizontal = 20.dp)
     ) {
         Text(
             text = label,
             color = AlfredTextDim,
             fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
