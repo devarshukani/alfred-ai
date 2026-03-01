@@ -66,6 +66,7 @@ class AlfredBrain(context: Context) {
         skillRegistry.registerSkill(MailSkill(MailAction(context)))
         skillRegistry.registerSkill(SearchSkill(SearchAction(context)))
         skillRegistry.registerSkill(WeatherSkill(WeatherAction(context)))
+        skillRegistry.registerSkill(MapsSkill(MapsAction(context)))
         skillRegistry.registerSkill(PaymentSkill(PaymentAction(context)))
         skillRegistry.registerSkill(NotificationSkill(NotificationAction(context)))
     }
