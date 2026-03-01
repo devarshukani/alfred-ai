@@ -109,6 +109,9 @@ dependencies {
     // ONNX Runtime for on-device embedding model
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 
+    // Archive extraction for model downloads (tar.bz2)
+    implementation("org.apache.commons:commons-compress:1.26.1")
+
     // Tabler Icons for Compose
     implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
 
