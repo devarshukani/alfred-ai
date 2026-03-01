@@ -1,8 +1,10 @@
-package com.alfredassistant.alfred_ai.features.payments
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 
 /**
  * Launch payment and financial apps via intents.
@@ -82,4 +84,24 @@ class PaymentAction(private val context: Context) {
         return if (available.isEmpty()) "No known payment apps found on this device."
         else "Available payment apps: ${available.joinToString(", ")}."
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "launch_payment_app",
+            description = "Launch a payment app. Supported: GPay, Google Pay, PhonePe, Paytm, PayPal, Samsung Pay, Amazon Pay, CRED, BHIM, WhatsApp Pay.",
+            parameters = listOf(Param(name = "app_name", type = "string", description = "Name of the payment app")),
+            required = listOf("app_name")
+        ) { args -> launchPaymentApp(args.getString("app_name")) },
+        ToolDef(
+            name = "upi_payment",
+            description = "Initiate a UPI payment. Use phone number as UPI ID in format '91XXXXXXXXXX@upi'. Opens a UPI app to complete.",
+            parameters = listOf(
+                Param(name = "upi_id", type = "string", description = "Recipient's UPI ID. Use '91XXXXXXXXXX@upi' format."),
+                Param(name = "name", type = "string", description = "Recipient name (optional)"),
+                Param(name = "amount", type = "string", description = "Amount to pay (optional)")
+            ),
+            required = listOf("upi_id")
+        ) { args -> openUpiPayment(args.getString("upi_id"), args.optString("name", null), args.optString("amount", null)) },
+        ToolDef(name = "list_payment_apps", description = "List payment apps installed on the device.") { _ -> listAvailablePaymentApps() }
+    )
 }

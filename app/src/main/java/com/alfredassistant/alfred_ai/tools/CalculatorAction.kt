@@ -1,4 +1,7 @@
-package com.alfredassistant.alfred_ai.features.calculator
+package com.alfredassistant.alfred_ai.tools
+
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 
 /**
  * Evaluates math expressions and unit conversions.
@@ -40,7 +43,6 @@ class CalculatorAction {
             from == "cm" && to == "m" -> value / 100
             from == "km" && to == "m" -> value * 1000
             from == "m" && to == "km" -> value / 1000
-
             // Weight
             from == "kg" && to == "lbs" -> value * 2.20462
             from == "lbs" && to == "kg" -> value * 0.453592
@@ -48,7 +50,6 @@ class CalculatorAction {
             from == "oz" && to == "g" -> value * 28.3495
             from == "kg" && to == "g" -> value * 1000
             from == "g" && to == "kg" -> value / 1000
-
             // Temperature
             from == "celsius" && to == "fahrenheit" -> value * 9.0 / 5.0 + 32
             from == "fahrenheit" && to == "celsius" -> (value - 32) * 5.0 / 9.0
@@ -56,23 +57,19 @@ class CalculatorAction {
             from == "kelvin" && to == "celsius" -> value - 273.15
             from == "c" && to == "f" -> value * 9.0 / 5.0 + 32
             from == "f" && to == "c" -> (value - 32) * 5.0 / 9.0
-
             // Volume
             from == "liters" && to == "gallons" -> value * 0.264172
             from == "gallons" && to == "liters" -> value * 3.78541
             from == "ml" && to == "liters" -> value / 1000
             from == "liters" && to == "ml" -> value * 1000
-
             // Speed
             from == "kmh" && to == "mph" -> value * 0.621371
             from == "mph" && to == "kmh" -> value * 1.60934
-
             // Area
             from == "sqm" && to == "sqft" -> value * 10.7639
             from == "sqft" && to == "sqm" -> value * 0.092903
             from == "acres" && to == "hectares" -> value * 0.404686
             from == "hectares" && to == "acres" -> value * 2.47105
-
             else -> return "Unsupported conversion: $fromUnit to $toUnit"
         }
 
@@ -83,6 +80,26 @@ class CalculatorAction {
         }
         return "$formatted $toUnit"
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "evaluate_expression",
+            description = "Evaluate a mathematical expression. Supports +, -, *, /, ^, %, parentheses.",
+            parameters = listOf(Param(name = "expression", type = "string", description = "The math expression to evaluate")),
+            required = listOf("expression")
+        ) { args -> "Result: ${evaluate(args.getString("expression"))}" },
+
+        ToolDef(
+            name = "convert_unit",
+            description = "Convert a value from one unit to another. Supports length, weight, temperature, volume, speed, area.",
+            parameters = listOf(
+                Param(name = "value", type = "number", description = "The numeric value to convert"),
+                Param(name = "from_unit", type = "string", description = "Source unit (e.g. km, lbs, celsius)"),
+                Param(name = "to_unit", type = "string", description = "Target unit (e.g. miles, kg, fahrenheit)")
+            ),
+            required = listOf("value", "from_unit", "to_unit")
+        ) { args -> convertUnit(args.getDouble("value"), args.getString("from_unit"), args.getString("to_unit")) }
+    )
 }
 
 /**

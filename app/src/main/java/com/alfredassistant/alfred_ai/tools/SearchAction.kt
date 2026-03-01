@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.search
+package com.alfredassistant.alfred_ai.tools
 
 import android.app.SearchManager
 import android.content.Context
@@ -13,6 +13,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import java.util.concurrent.TimeUnit
 
 class SearchAction(private val context: Context) {
@@ -201,4 +203,31 @@ class SearchAction(private val context: Context) {
         }
         context.startActivity(intent)
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(name = "search_apps", description = "Search installed apps by name. Returns app names and package names.",
+            parameters = listOf(Param(name = "query", type = "string", description = "App name to search for")),
+            required = listOf("query")
+        ) { args -> searchApps(args.getString("query")) },
+        ToolDef(name = "launch_app", description = "Launch an app by its package name. Use search_apps first to find the package name.",
+            parameters = listOf(Param(name = "package_name", type = "string", description = "The package name of the app")),
+            required = listOf("package_name")
+        ) { args -> launchApp(args.getString("package_name")) },
+        ToolDef(name = "open_settings", description = "Open a specific system settings page. Supported: wifi, bluetooth, display, sound, battery, storage, apps, location, security, accessibility, date, language, developer, nfc, notifications.",
+            parameters = listOf(Param(name = "settings_type", type = "string", description = "The type of settings to open")),
+            required = listOf("settings_type")
+        ) { args -> openSettings(args.getString("settings_type")) },
+        ToolDef(name = "web_search", description = "Search the web for information. Returns text snippets. Use for factual questions, current events, definitions.",
+            parameters = listOf(Param(name = "query", type = "string", description = "The search query")),
+            required = listOf("query")
+        ) { args -> webSearch(args.getString("query")) },
+        ToolDef(name = "open_web_search", description = "Open a web search in the browser for the user to browse results.",
+            parameters = listOf(Param(name = "query", type = "string", description = "The search query")),
+            required = listOf("query")
+        ) { args -> openWebSearch(args.getString("query")); "Browser opened." },
+        ToolDef(name = "open_url", description = "Open a specific URL in the browser.",
+            parameters = listOf(Param(name = "url", type = "string", description = "The URL to open")),
+            required = listOf("url")
+        ) { args -> openUrl(args.getString("url")); "URL opened." }
+    )
 }
