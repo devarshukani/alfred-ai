@@ -15,6 +15,7 @@ import com.alfredassistant.alfred_ai.features.payments.PaymentAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
 import com.alfredassistant.alfred_ai.features.phone.toJsonString
 import com.alfredassistant.alfred_ai.features.search.SearchAction
+import com.alfredassistant.alfred_ai.features.sms.SmsAction
 import com.alfredassistant.alfred_ai.features.weather.WeatherAction
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
 import kotlinx.coroutines.CompletableDeferred
@@ -31,6 +32,7 @@ class AlfredBrain(context: Context) {
     private val weatherAction = WeatherAction(context)
     private val paymentAction = PaymentAction(context)
     private val notificationAction = NotificationAction(context)
+    private val smsAction = SmsAction(context)
 
     // Vector DB + Embedding infrastructure
     private val embeddingModel = EmbeddingModel(context)
@@ -84,7 +86,7 @@ class AlfredBrain(context: Context) {
         private val REDIRECTING_TOOLS = setOf(
             "make_call", "dial_number", "launch_app", "open_url", "open_settings",
             "launch_payment_app", "upi_payment", "open_mail", "open_calendar",
-            "compose_email", "share_via_email", "open_web_search"
+            "compose_email", "share_via_email", "open_web_search", "open_sms_app"
         )
     }
 
@@ -162,6 +164,18 @@ class AlfredBrain(context: Context) {
                 "dial_number" -> {
                     phoneAction.dialNumber(call.arguments.getString("phone_number"))
                     "Dialer opened."
+                }
+
+                // --- SMS ---
+                "send_sms" -> {
+                    val number = call.arguments.getString("phone_number")
+                    val message = call.arguments.getString("message")
+                    smsAction.sendSms(number, message)
+                }
+                "open_sms_app" -> {
+                    val number = call.arguments.getString("phone_number")
+                    val message = call.arguments.optString("message", null)
+                    smsAction.openSmsApp(number, message)
                 }
 
                 // --- Alarm ---
