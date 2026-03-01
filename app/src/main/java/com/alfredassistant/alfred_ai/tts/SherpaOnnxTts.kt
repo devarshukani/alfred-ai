@@ -12,13 +12,8 @@ import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
 
 private const val TAG = "SherpaOnnxTts"
-
-private const val ASSET_DATA_DIR = "models/tts/espeak-ng-data"
-private const val ASSET_TOKENS_PATH = "models/tts/tokens.txt"
 
 object SherpaOnnxTts {
 
@@ -44,22 +39,21 @@ object SherpaOnnxTts {
             return
         }
 
-        // espeak-ng-data must live on the real filesystem for native code
-        // These small files stay in APK assets and are copied once
-        val externalDataDir = copyDataDir(context, ASSET_DATA_DIR)
-
-        // tokens.txt also stays in assets — copy to external so sherpa can read it
         val tokensFile = File(ttsDir, "tokens.txt")
         if (!tokensFile.exists()) {
-            copyAssetFile(context, ASSET_TOKENS_PATH, tokensFile)
+            Log.e(TAG, "TTS tokens.txt not found in ${ttsDir.absolutePath}. Run model download first.")
+            return
         }
+
+        // espeak-ng-data is downloaded during onboarding to the same tts directory
+        val espeakDataDir = File(ttsDir, "espeak-ng-data").absolutePath
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
                     model = modelFile.absolutePath,
                     tokens = tokensFile.absolutePath,
-                    dataDir = externalDataDir,
+                    dataDir = espeakDataDir,
                 ),
                 numThreads = 2,
                 debug = false,
@@ -195,55 +189,5 @@ object SherpaOnnxTts {
         stop()
         tts?.free()
         tts = null
-    }
-
-    // --- Asset copying (espeak-ng-data + tokens.txt from APK assets) ---
-
-    private fun copyDataDir(context: Context, dataDir: String): String {
-        copyAssets(context, dataDir)
-        return "${context.getExternalFilesDir(null)!!.absolutePath}/$dataDir"
-    }
-
-    private fun copyAssets(context: Context, path: String) {
-        try {
-            val list = context.assets.list(path)
-            if (list.isNullOrEmpty()) {
-                copyAssetToExternal(context, path)
-            } else {
-                File("${context.getExternalFilesDir(null)}/$path").mkdirs()
-                for (item in list) {
-                    copyAssets(context, "$path/$item")
-                }
-            }
-        } catch (ex: IOException) {
-            Log.e(TAG, "Failed to copy $path: $ex")
-        }
-    }
-
-    private fun copyAssetToExternal(context: Context, filename: String) {
-        try {
-            val dest = File("${context.getExternalFilesDir(null)}/$filename")
-            if (dest.exists()) return
-            context.assets.open(filename).use { input ->
-                FileOutputStream(dest).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (ex: Exception) {
-            Log.e(TAG, "Failed to copy $filename: $ex")
-        }
-    }
-
-    private fun copyAssetFile(context: Context, assetPath: String, dest: File) {
-        try {
-            dest.parentFile?.mkdirs()
-            context.assets.open(assetPath).use { input ->
-                FileOutputStream(dest).use { output ->
-                    input.copyTo(output)
-                }
-            }
-        } catch (ex: Exception) {
-            Log.e(TAG, "Failed to copy asset $assetPath: $ex")
-        }
     }
 }

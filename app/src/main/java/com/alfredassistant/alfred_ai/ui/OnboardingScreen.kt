@@ -334,7 +334,7 @@ private fun ModelDownloadPage(onFinish: () -> Unit) {
             Text(
                 text = when (downloadState) {
                     DownloadState.Ready ->
-                        "Alfred needs to download voice and language models.\nThis is a one-time setup (~150 MB)."
+                        "Alfred needs to download voice and language models.\nThis is a one-time setup (~170 MB)."
                     DownloadState.Downloading ->
                         currentLabel.ifBlank { "Preparing download..." }
                     DownloadState.Done ->
