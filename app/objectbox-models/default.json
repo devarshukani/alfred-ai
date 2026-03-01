@@ -1,0 +1,196 @@
+{
+  "_note1": "KEEP THIS FILE! Check it into a version control system (VCS) like git.",
+  "_note2": "ObjectBox manages crucial IDs for your object model. See docs for details.",
+  "_note3": "If you have VCS merge conflicts, you must resolve them according to ObjectBox docs.",
+  "entities": [
+    {
+      "id": "1:8693062432509910103",
+      "lastPropertyId": "5:4659351569340971810",
+      "name": "KnowledgeEdge",
+      "properties": [
+        {
+          "id": "1:4382481315036341069",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:6912170787396786491",
+          "name": "sourceNodeId",
+          "indexId": "1:4119473512032731214",
+          "type": 6,
+          "flags": 8
+        },
+        {
+          "id": "3:9151402304199216678",
+          "name": "targetNodeId",
+          "indexId": "2:6014582983399844977",
+          "type": 6,
+          "flags": 8
+        },
+        {
+          "id": "4:4228592096187144892",
+          "name": "relationship",
+          "indexId": "3:5611778562656929081",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:4659351569340971810",
+          "name": "createdAt",
+          "type": 6
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "2:2292011825439859252",
+      "lastPropertyId": "6:4396309820242981638",
+      "name": "KnowledgeNode",
+      "properties": [
+        {
+          "id": "1:2164507512745891930",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:645057337497824964",
+          "name": "label",
+          "indexId": "4:1724459440383114750",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:8707898480962895927",
+          "name": "nodeType",
+          "indexId": "5:1682887110721099841",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:3427005608815688493",
+          "name": "metadata",
+          "type": 9
+        },
+        {
+          "id": "5:1124784077684764425",
+          "name": "createdAt",
+          "type": 6
+        },
+        {
+          "id": "6:4396309820242981638",
+          "name": "embedding",
+          "indexId": "6:5580861962389408252",
+          "type": 28,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "3:7374419817546436787",
+      "lastPropertyId": "7:8988248630862003136",
+      "name": "MemoryEntity",
+      "properties": [
+        {
+          "id": "1:1274180701429787922",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:8715754945554853546",
+          "name": "key",
+          "indexId": "7:472852510737905212",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "3:3668650192678827518",
+          "name": "value",
+          "type": 9
+        },
+        {
+          "id": "4:1564290488699679433",
+          "name": "type",
+          "indexId": "8:9096824199528013238",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "5:2326328446143052502",
+          "name": "createdAt",
+          "type": 6
+        },
+        {
+          "id": "6:3676117842512360740",
+          "name": "updatedAt",
+          "type": 6
+        },
+        {
+          "id": "7:8988248630862003136",
+          "name": "embedding",
+          "indexId": "9:1831632729959946286",
+          "type": 28,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "4:4644066011765137137",
+      "lastPropertyId": "6:7750961162651945344",
+      "name": "ToolEntity",
+      "properties": [
+        {
+          "id": "1:8267146462373314831",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:126963350197005776",
+          "name": "name",
+          "indexId": "10:3199781152596496545",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:1992774728700529274",
+          "name": "description",
+          "type": 9
+        },
+        {
+          "id": "4:6009724531920243567",
+          "name": "toolJson",
+          "type": 9
+        },
+        {
+          "id": "5:8374097190466878807",
+          "name": "alwaysInclude",
+          "type": 1
+        },
+        {
+          "id": "6:7750961162651945344",
+          "name": "embedding",
+          "indexId": "11:5951664570077819337",
+          "type": 28,
+          "flags": 8
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "lastEntityId": "4:4644066011765137137",
+  "lastIndexId": "11:5951664570077819337",
+  "lastRelationId": "0:0",
+  "lastSequenceId": "0:0",
+  "modelVersion": 5,
+  "modelVersionParserMinimum": 5,
+  "retiredEntityUids": [],
+  "retiredIndexUids": [],
+  "retiredPropertyUids": [],
+  "retiredRelationUids": [],
+  "version": 1
+}

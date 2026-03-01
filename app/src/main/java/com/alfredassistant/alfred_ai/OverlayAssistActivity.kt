@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.alfredassistant.alfred_ai.assistant.AlfredBrain
+import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
@@ -56,6 +57,9 @@ class OverlayAssistActivity : ComponentActivity() {
             }
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         }
+
+        // Initialize ObjectBox before anything that depends on it
+        ObjectBoxStore.init(this)
 
         brain = AlfredBrain(this)
 
@@ -172,6 +176,7 @@ class OverlayAssistActivity : ComponentActivity() {
                 state = assistantState,
                 audioLevel = audioLevel,
                 confirmation = currentConfirmation,
+                brain = brain,
                 onMicTap = {
                     when (assistantState) {
                         AssistantState.LISTENING -> speechHelper.stopListening()

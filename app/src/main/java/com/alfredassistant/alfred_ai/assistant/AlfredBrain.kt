@@ -1,11 +1,15 @@
 package com.alfredassistant.alfred_ai.assistant
 
 import android.content.Context
+import com.alfredassistant.alfred_ai.db.ObjectBoxStore
+import com.alfredassistant.alfred_ai.embedding.EmbeddingModel
 import com.alfredassistant.alfred_ai.features.alarm.AlarmAction
 import com.alfredassistant.alfred_ai.features.calculator.CalculatorAction
 import com.alfredassistant.alfred_ai.features.calendar.CalendarAction
 import com.alfredassistant.alfred_ai.features.mail.MailAction
+import com.alfredassistant.alfred_ai.features.memory.KnowledgeGraph
 import com.alfredassistant.alfred_ai.features.memory.MemoryStore
+import com.alfredassistant.alfred_ai.features.memory.ToolRegistry
 import com.alfredassistant.alfred_ai.features.notifications.NotificationAction
 import com.alfredassistant.alfred_ai.features.payments.PaymentAction
 import com.alfredassistant.alfred_ai.features.phone.PhoneAction
@@ -27,13 +31,34 @@ class AlfredBrain(context: Context) {
     private val weatherAction = WeatherAction(context)
     private val paymentAction = PaymentAction(context)
     private val notificationAction = NotificationAction(context)
-    private val memoryStore = MemoryStore(context)
+
+    // Vector DB + Embedding infrastructure
+    private val embeddingModel = EmbeddingModel(context)
+    private val memoryStore = MemoryStore(context, embeddingModel)
+    private val knowledgeGraph = KnowledgeGraph(embeddingModel)
+    private val toolRegistry = ToolRegistry(embeddingModel)
 
     // Callback for when AI wants to show options to the user
     var onConfirmationNeeded: ((ConfirmationRequest) -> Unit)? = null
 
     // Deferred that gets completed when user picks an option
     private var pendingSelection: CompletableDeferred<String>? = null
+
+    /** Last set of tool names selected for a query (for debug UI) */
+    var lastSelectedTools: List<String> = emptyList()
+        private set
+    /** Last set of tool calls executed (for debug UI) */
+    var lastExecutedTools: List<String> = emptyList()
+        private set
+
+    init {
+        // Initialize ObjectBox if not already done
+        ObjectBoxStore.init(context)
+        // Initialize embedding model in background
+        embeddingModel.initialize()
+        // Register all tools with embeddings for smart routing
+        toolRegistry.registerTools(mistral.getAllToolDefinitions())
+    }
 
     /**
      * Called from the UI when user taps or speaks an option.
@@ -43,19 +68,43 @@ class AlfredBrain(context: Context) {
     }
 
     suspend fun processInput(userSpeech: String): String {
-        // Inject memory context into system prompt
-        mistral.setMemoryContext(memoryStore.getMemoryContext())
+        // Inject relevant memory context (semantic search based on user query)
+        val memoryContext = memoryStore.getRelevantMemoryContext(userSpeech)
+        val graphContext = knowledgeGraph.getGraphContext(userSpeech)
+        val fullContext = listOf(memoryContext, graphContext)
+            .filter { it.isNotBlank() }
+            .joinToString("\n")
+        mistral.setMemoryContext(fullContext)
 
-        var result = mistral.chat(userSpeech)
+        // Get only relevant tools for this query (smart routing)
+        val relevantTools = toolRegistry.getRelevantTools(userSpeech)
+
+        // Track selected tools for debug UI
+        val toolNames = mutableListOf<String>()
+        for (i in 0 until relevantTools.length()) {
+            try {
+                toolNames.add(relevantTools.getJSONObject(i).getJSONObject("function").getString("name"))
+            } catch (_: Exception) {}
+        }
+        lastSelectedTools = toolNames
+
+        val executedNames = mutableListOf<String>()
+
+        var result = mistral.chat(userSpeech, relevantTools)
 
         var maxIterations = 12
         while (result.toolCalls.isNotEmpty() && maxIterations > 0) {
             maxIterations--
             val toolResults = result.toolCalls.map { call ->
+                executedNames.add(call.functionName)
                 Pair(call.id, executeToolCall(call))
             }
+            // On subsequent calls in the tool loop, send all tools
+            // since the LLM might need different tools for follow-up
             result = mistral.sendToolResults(toolResults)
         }
+
+        lastExecutedTools = executedNames
 
         return result.content ?: "All done!"
     }
@@ -191,12 +240,21 @@ class AlfredBrain(context: Context) {
                 }
                 "clear_notifications" -> notificationAction.clearNotifications()
 
-                // --- Memory ---
-                "remember_fact" -> memoryStore.rememberFact(call.arguments.getString("key"), call.arguments.getString("value"))
+                // --- Memory (now backed by ObjectBox + vector search) ---
+                "remember_fact" -> {
+                    val key = call.arguments.getString("key")
+                    val value = call.arguments.getString("value")
+                    // Also extract into knowledge graph
+                    knowledgeGraph.extractAndStore(key, value)
+                    memoryStore.rememberFact(key, value)
+                }
                 "recall_fact" -> memoryStore.recallFact(call.arguments.getString("key"))
                 "get_all_memories" -> memoryStore.getAllFacts() + "\n" + memoryStore.getAllPreferences()
                 "forget_fact" -> memoryStore.forgetFact(call.arguments.getString("key"))
                 "set_preference" -> memoryStore.setPreference(call.arguments.getString("key"), call.arguments.getString("value"))
+
+                // --- Knowledge Graph ---
+                "query_knowledge_graph" -> knowledgeGraph.queryGraph(call.arguments.getString("topic"))
 
                 // --- Options / Confirmation ---
                 "present_options" -> {
@@ -233,5 +291,22 @@ class AlfredBrain(context: Context) {
 
     fun resetConversation() {
         mistral.clearHistory()
+    }
+
+    // ==================== DEBUG DATA ====================
+
+    /** Get all stored memories for debug display */
+    fun getDebugMemories(): List<Pair<String, String>> {
+        return memoryStore.getDebugEntries()
+    }
+
+    /** Get all knowledge graph nodes for debug display */
+    fun getDebugGraphNodes(): List<Triple<Long, String, String>> {
+        return knowledgeGraph.getDebugNodes()
+    }
+
+    /** Get all knowledge graph edges for debug display */
+    fun getDebugGraphEdges(): List<Triple<String, String, String>> {
+        return knowledgeGraph.getDebugEdges()
     }
 }
