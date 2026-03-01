@@ -1,10 +1,13 @@
 package com.alfredassistant.alfred_ai.models
 
+import android.app.DownloadManager
 import android.content.Context
+import android.net.Uri
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import kotlinx.coroutines.*
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
+import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
@@ -16,47 +19,23 @@ private const val TAG = "ModelDownloader"
  * Downloads TTS and embedding ONNX models at runtime (during onboarding).
  * Files are stored in: getExternalFilesDir(null)/models/
  *
- * Downloaded files (~170 MB total):
- *   models/tts/model.onnx           (~60 MB)  — sherpa-onnx compatible (csukuangfj repo)
- *   models/tts/tokens.txt           (~4 KB)
- *   models/tts/espeak-ng-data/      (~18 MB, ~250 files)
- *   models/embedding/model.onnx     (~86 MB)
- *   models/embedding/vocab.txt      (~228 KB)
+ * TTS bundle (~80 MB tar.bz2) is downloaded as a single archive from sherpa-onnx
+ * GitHub releases, then extracted. Contains model.onnx, tokens.txt, espeak-ng-data/.
+ *
+ * Embedding model (~86 MB) + vocab (~228 KB) downloaded individually via DownloadManager.
  */
 object ModelDownloader {
 
-    // ── Bump this whenever model URLs change to force re-download ──
     private const val MODEL_VERSION = 3
 
-    // ── HuggingFace repo for TTS model + espeak-ng-data ──
-    private const val HF_TTS_REPO = "csukuangfj/vits-piper-en_US-ryan-medium"
-    private const val HF_TTS_BASE =
-        "https://huggingface.co/$HF_TTS_REPO/resolve/main"
-    private const val HF_TTS_API =
-        "https://huggingface.co/api/models/$HF_TTS_REPO"
+    private const val TTS_MODEL_NAME = "vits-piper-en_US-ryan-medium"
+    private const val TTS_ARCHIVE_URL =
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/$TTS_MODEL_NAME.tar.bz2"
 
-    private const val TTS_MODEL_URL = "$HF_TTS_BASE/en_US-ryan-medium.onnx"
-    private const val TTS_TOKENS_URL = "$HF_TTS_BASE/tokens.txt"
-
-    // ── Embedding model (all-MiniLM-L6-v2) ──
     private const val EMB_MODEL_URL =
         "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"
     private const val EMB_VOCAB_URL =
         "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/vocab.txt"
-
-    data class DownloadTask(
-        val label: String,
-        val url: String,
-        val relativePath: String
-    )
-
-    /** Fixed download tasks (large files) */
-    private val fixedTasks = listOf(
-        DownloadTask("Voice model", TTS_MODEL_URL, "models/tts/model.onnx"),
-        DownloadTask("Voice tokens", TTS_TOKENS_URL, "models/tts/tokens.txt"),
-        DownloadTask("Language model", EMB_MODEL_URL, "models/embedding/model.onnx"),
-        DownloadTask("Vocabulary", EMB_VOCAB_URL, "models/embedding/vocab.txt"),
-    )
 
     private fun getPrefs(context: Context) =
         context.getSharedPreferences("alfred_models", Context.MODE_PRIVATE)
@@ -65,33 +44,27 @@ object ModelDownloader {
         val prefs = getPrefs(context)
         val stored = prefs.getInt("model_version", 0)
         if (stored == MODEL_VERSION) return
-
         Log.w(TAG, "Model version changed ($stored → $MODEL_VERSION). Wiping old models.")
         val modelsDir = getModelsDir(context)
-        if (modelsDir.exists()) {
-            modelsDir.deleteRecursively()
-            Log.d(TAG, "  Deleted entire models directory")
-        }
+        if (modelsDir.exists()) modelsDir.deleteRecursively()
         prefs.edit().putInt("model_version", MODEL_VERSION).apply()
     }
 
-    /** Check if all model files are present (and correct version) */
     fun isComplete(context: Context): Boolean {
         migrateIfNeeded(context)
         val base = context.getExternalFilesDir(null) ?: return false
-        // Check fixed tasks
-        val fixedOk = fixedTasks.all { task ->
-            val f = File(base, task.relativePath)
-            f.exists() && f.length() > 0
-        }
-        // Check espeak-ng-data critical file
+        val ttsOk = File(base, "models/tts/model.onnx").let { it.exists() && it.length() > 0 }
         val espeakOk = File(base, "models/tts/espeak-ng-data/phontab").exists()
-        return fixedOk && espeakOk
+        val embOk = File(base, "models/embedding/model.onnx").let { it.exists() && it.length() > 0 }
+        val vocabOk = File(base, "models/embedding/vocab.txt").let { it.exists() && it.length() > 0 }
+        return ttsOk && espeakOk && embOk && vocabOk
     }
 
     /**
-     * Download all models including espeak-ng-data.
-     * Calls [onProgress] with (stepIndex, totalSteps, stepLabel, bytesDownloaded).
+     * Download all models. 3 steps:
+     *   0 → TTS archive (download + extract)
+     *   1 → Embedding model
+     *   2 → Vocabulary
      */
     suspend fun downloadAll(
         context: Context,
@@ -101,50 +74,68 @@ object ModelDownloader {
         val base = context.getExternalFilesDir(null)
             ?: return@withContext Result.failure(Exception("No external storage"))
 
-        // Total steps = fixed tasks + 1 for espeak-ng-data batch
-        val totalSteps = fixedTasks.size + 1
+        val totalSteps = 3
+        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
-        // 1. Download fixed tasks (model.onnx, tokens.txt, embedding model, vocab)
-        for ((index, task) in fixedTasks.withIndex()) {
-            val dest = File(base, task.relativePath)
-            if (dest.exists() && dest.length() > 0) {
-                Log.d(TAG, "Skipping ${task.label} — already exists")
-                onProgress(index, totalSteps, task.label, -1)
-                continue
-            }
+        // Step 0: TTS archive (model + tokens + espeak-ng-data in one tar.bz2)
+        val ttsDir = File(base, "models/tts")
+        val ttsComplete = File(ttsDir, "model.onnx").let { it.exists() && it.length() > 0 }
+                && File(ttsDir, "espeak-ng-data/phontab").exists()
+
+        if (ttsComplete) {
+            Log.d(TAG, "Skipping TTS — already extracted")
+            onProgress(0, totalSteps, "Voice pack", -1)
+        } else {
             try {
-                dest.parentFile?.mkdirs()
-                onProgress(index, totalSteps, task.label, 0)
-                downloadFile(task.url, dest) { bytes ->
-                    onProgress(index, totalSteps, task.label, bytes)
+                onProgress(0, totalSteps, "Voice pack", 0)
+                val archive = File(base, "tts-archive.tar.bz2")
+                downloadWithManager(dm, TTS_ARCHIVE_URL, archive, "Voice pack") { bytes ->
+                    onProgress(0, totalSteps, "Voice pack", bytes)
                 }
-                Log.d(TAG, "Downloaded ${task.label} → ${dest.absolutePath}")
+                onProgress(0, totalSteps, "Extracting voice pack", -1)
+                extractTarBz2(archive, ttsDir)
+                archive.delete()
+                Log.d(TAG, "TTS archive extracted to ${ttsDir.absolutePath}")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to download ${task.label}: $e")
-                dest.delete()
+                Log.e(TAG, "Failed TTS download/extract: $e")
                 return@withContext Result.failure(e)
             }
         }
 
-        // 2. Download espeak-ng-data (many small files)
-        val espeakStep = fixedTasks.size
-        val espeakDir = File(base, "models/tts/espeak-ng-data")
-        val espeakMarker = File(espeakDir, ".complete")
-
-        if (espeakMarker.exists()) {
-            Log.d(TAG, "Skipping espeak-ng-data — already complete")
-            onProgress(espeakStep, totalSteps, "Voice data", -1)
+        // Step 1: Embedding model
+        val embModel = File(base, "models/embedding/model.onnx")
+        if (embModel.exists() && embModel.length() > 0) {
+            Log.d(TAG, "Skipping embedding model — already exists")
+            onProgress(1, totalSteps, "Language model", -1)
         } else {
             try {
-                onProgress(espeakStep, totalSteps, "Voice data", 0)
-                downloadEspeakData(base, espeakDir) { bytes ->
-                    onProgress(espeakStep, totalSteps, "Voice data", bytes)
+                embModel.parentFile?.mkdirs()
+                onProgress(1, totalSteps, "Language model", 0)
+                downloadWithManager(dm, EMB_MODEL_URL, embModel, "Language model") { bytes ->
+                    onProgress(1, totalSteps, "Language model", bytes)
                 }
-                // Mark complete so we don't re-download
-                espeakMarker.createNewFile()
-                Log.d(TAG, "espeak-ng-data download complete")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to download espeak-ng-data: $e")
+                Log.e(TAG, "Failed embedding model download: $e")
+                embModel.delete()
+                return@withContext Result.failure(e)
+            }
+        }
+
+        // Step 2: Vocabulary
+        val vocabFile = File(base, "models/embedding/vocab.txt")
+        if (vocabFile.exists() && vocabFile.length() > 0) {
+            Log.d(TAG, "Skipping vocab — already exists")
+            onProgress(2, totalSteps, "Vocabulary", -1)
+        } else {
+            try {
+                vocabFile.parentFile?.mkdirs()
+                onProgress(2, totalSteps, "Vocabulary", 0)
+                downloadWithManager(dm, EMB_VOCAB_URL, vocabFile, "Vocabulary") { bytes ->
+                    onProgress(2, totalSteps, "Vocabulary", bytes)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed vocab download: $e")
+                vocabFile.delete()
                 return@withContext Result.failure(e)
             }
         }
@@ -154,98 +145,105 @@ object ModelDownloader {
     }
 
     /**
-     * Fetch the file list from HuggingFace API and download all espeak-ng-data/ files.
+     * Extract tar.bz2 archive. The archive contains a top-level folder
+     * (e.g. "vits-piper-en_US-ryan-medium/") — we strip it and extract
+     * contents directly into [destDir].
      */
-    private fun downloadEspeakData(base: File, espeakDir: File, onBytes: (Long) -> Unit) {
-        // Fetch repo file list from HuggingFace API
-        val conn = followRedirects(HF_TTS_API)
-        if (conn.responseCode != 200) {
-            conn.disconnect()
-            throw Exception("Failed to fetch repo info: HTTP ${conn.responseCode}")
-        }
-        val json = conn.inputStream.bufferedReader().readText()
-        conn.disconnect()
+    private fun extractTarBz2(archive: File, destDir: File) {
+        destDir.mkdirs()
+        val prefix = "$TTS_MODEL_NAME/"
 
-        val repo = JSONObject(json)
-        val siblings = repo.getJSONArray("siblings")
+        archive.inputStream().buffered().use { fileIn ->
+            BZip2CompressorInputStream(BufferedInputStream(fileIn)).use { bzIn ->
+                TarArchiveInputStream(bzIn).use { tar ->
+                    var entry = tar.nextEntry
+                    while (entry != null) {
+                        // Strip the top-level directory prefix
+                        val name = if (entry.name.startsWith(prefix))
+                            entry.name.removePrefix(prefix)
+                        else entry.name
 
-        // Collect all espeak-ng-data files
-        val espeakFiles = mutableListOf<String>()
-        for (i in 0 until siblings.length()) {
-            val rfilename = siblings.getJSONObject(i).getString("rfilename")
-            if (rfilename.startsWith("espeak-ng-data/")) {
-                espeakFiles.add(rfilename)
-            }
-        }
+                        if (name.isBlank()) { entry = tar.nextEntry; continue }
 
-        Log.d(TAG, "espeak-ng-data: ${espeakFiles.size} files to download")
-        var totalBytes = 0L
-
-        for (filename in espeakFiles) {
-            val dest = File(base, "models/tts/$filename")
-            if (dest.exists() && dest.length() > 0) continue
-
-            dest.parentFile?.mkdirs()
-            val url = "$HF_TTS_BASE/$filename"
-            downloadFile(url, dest) { bytes ->
-                // Report cumulative bytes across all espeak files
-            }
-            totalBytes += dest.length()
-            onBytes(totalBytes)
-        }
-    }
-
-    private fun downloadFile(urlStr: String, dest: File, onBytes: (Long) -> Unit) {
-        var conn: HttpURLConnection? = null
-        try {
-            conn = followRedirects(urlStr)
-            if (conn.responseCode != 200) {
-                throw Exception("HTTP ${conn.responseCode} for $urlStr")
-            }
-            val tmpFile = File(dest.absolutePath + ".tmp")
-            conn.inputStream.use { input ->
-                FileOutputStream(tmpFile).use { output ->
-                    val buf = ByteArray(8192)
-                    var total = 0L
-                    var read: Int
-                    while (input.read(buf).also { read = it } != -1) {
-                        output.write(buf, 0, read)
-                        total += read
-                        onBytes(total)
+                        val outFile = File(destDir, name)
+                        if (entry.isDirectory) {
+                            outFile.mkdirs()
+                        } else {
+                            outFile.parentFile?.mkdirs()
+                            FileOutputStream(outFile).use { out ->
+                                tar.copyTo(out, bufferSize = 16384)
+                            }
+                        }
+                        entry = tar.nextEntry
                     }
                 }
             }
-            tmpFile.renameTo(dest)
-        } finally {
-            conn?.disconnect()
         }
+
+        // Rename the onnx file to model.onnx (archive has "en_US-ryan-medium.onnx")
+        val onnxFiles = destDir.listFiles { f -> f.extension == "onnx" && f.name != "model.onnx" }
+        onnxFiles?.firstOrNull()?.renameTo(File(destDir, "model.onnx"))
     }
 
-    private fun followRedirects(urlStr: String, maxRedirects: Int = 10): HttpURLConnection {
-        var url = URL(urlStr)
-        var redirects = 0
-        while (redirects < maxRedirects) {
-            val conn = url.openConnection() as HttpURLConnection
-            conn.instanceFollowRedirects = false
-            conn.connectTimeout = 30_000
-            conn.readTimeout = 60_000
-            conn.connect()
-            val code = conn.responseCode
-            if (code in 300..399) {
-                val location = conn.getHeaderField("Location")
-                    ?: throw Exception("Redirect without Location header")
-                conn.disconnect()
-                url = if (location.startsWith("http://") || location.startsWith("https://")) {
-                    URL(location)
-                } else {
-                    URL(url, location)
+    /**
+     * Download a file using Android DownloadManager for speed and resume support.
+     */
+    private suspend fun downloadWithManager(
+        dm: DownloadManager, url: String, dest: File, label: String,
+        onBytes: (Long) -> Unit
+    ) {
+        val tmpFile = File(dest.absolutePath + ".tmp")
+        tmpFile.delete()
+        dest.parentFile?.mkdirs()
+
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setTitle("Alfred: $label")
+            .setDescription("Downloading AI model")
+            .setDestinationUri(Uri.fromFile(tmpFile))
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            .setAllowedOverMetered(true)
+            .setAllowedOverRoaming(false)
+
+        val downloadId = dm.enqueue(request)
+        try {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            var complete = false
+            while (!complete) {
+                dm.query(query).use { cursor ->
+                    if (!cursor.moveToFirst()) return@use
+                    val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    val bytesIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                    val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+
+                    when (cursor.getInt(statusIdx)) {
+                        DownloadManager.STATUS_SUCCESSFUL -> {
+                            if (bytesIdx >= 0) onBytes(cursor.getLong(bytesIdx))
+                            complete = true
+                        }
+                        DownloadManager.STATUS_FAILED -> {
+                            val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else -1
+                            throw Exception("Download failed (reason=$reason) for $url")
+                        }
+                        DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING -> {
+                            if (bytesIdx >= 0) onBytes(cursor.getLong(bytesIdx))
+                        }
+                        DownloadManager.STATUS_PAUSED -> { /* wait */ }
+                    }
                 }
-                redirects++
-            } else {
-                return conn
+                if (!complete) delay(500)
             }
+            if (tmpFile.exists()) {
+                dest.delete()
+                tmpFile.renameTo(dest)
+            }
+            if (!dest.exists() || dest.length() == 0L) {
+                throw Exception("Download produced empty file for $url")
+            }
+        } catch (e: Exception) {
+            dm.remove(downloadId)
+            tmpFile.delete()
+            throw e
         }
-        throw Exception("Too many redirects for $urlStr")
     }
 
     fun getModelsDir(context: Context): File =
