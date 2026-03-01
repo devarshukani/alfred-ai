@@ -16,9 +16,11 @@
 .cxx
 local.properties
 
-# Sherpa-onnx native libs and model (downloaded by setup-sherpa-tts.sh)
+# Sherpa-onnx native libs and models (downloaded by setup scripts)
 app/src/main/jniLibs/
 app/src/main/assets/tts-model/
+app/src/main/assets/asr-model/
 jniLibs/
 sherpa-onnx-android.tar.bz2
 vits-piper-*.tar.bz2
+sherpa-onnx-streaming-*.tar.bz2
