@@ -327,13 +327,22 @@ class AlfredBrain(context: Context) {
     }
 
     /**
-     * Shorten text for TTS — replaces full phone numbers with "ending in XXX"
-     * and trims other verbose details that sound bad when spoken aloud.
+     * Shorten text for TTS — replaces full phone numbers with "ending in XXX",
+     * strips markdown, and trims verbose details for natural speech.
      */
     private fun abbreviateForSpeech(text: String): String {
-        // Replace phone numbers (7+ digits, with optional +, spaces, dashes) with last 3 digits
+        var result = text
+        // Strip markdown formatting
+        result = result
+            .replace(Regex("\\*\\*(.+?)\\*\\*"), "$1")
+            .replace(Regex("\\*(.+?)\\*"), "$1")
+            .replace(Regex("`(.+?)`"), "$1")
+            .replace(Regex("^#{1,6}\\s+", RegexOption.MULTILINE), "")
+            .replace(Regex("^[\\-*]\\s+", RegexOption.MULTILINE), "")
+            .replace(Regex("^\\d+\\.\\s+", RegexOption.MULTILINE), "")
+        // Replace phone numbers (7+ digits) with last 3 digits
         val phoneRegex = Regex("""[\+]?[\d\s\-\(\)]{7,}""")
-        return phoneRegex.replace(text) { match ->
+        result = phoneRegex.replace(result) { match ->
             val digits = match.value.filter { it.isDigit() }
             if (digits.length >= 4) {
                 "ending in ${digits.takeLast(3)}"
@@ -341,6 +350,7 @@ class AlfredBrain(context: Context) {
                 match.value
             }
         }
+        return result.trim()
     }
 
     // ==================== DEBUG DATA ====================
