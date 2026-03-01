@@ -1,14 +1,16 @@
 package com.alfredassistant.alfred_ai
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import com.alfredassistant.alfred_ai.assistant.AlfredBrain
@@ -16,7 +18,9 @@ import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import com.alfredassistant.alfred_ai.ui.OnboardingScreen
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
+import com.alfredassistant.alfred_ai.ui.onboardingSteps
 import com.alfredassistant.alfred_ai.ui.theme.AlfredaiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,149 +67,190 @@ class OverlayAssistActivity : ComponentActivity() {
 
         brain = AlfredBrain(this)
 
+        // Track granted permissions reactively for onboarding
+        val grantedPermissions = mutableStateOf(getCurrentGrantedPermissions())
+
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
-        ) { permissions ->
-            val micGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
-            if (!micGranted) {
-                Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show()
-                finish()
+        ) { results ->
+            // Refresh the full set so onboarding UI updates instantly
+            grantedPermissions.value = getCurrentGrantedPermissions()
+
+            // If mic was explicitly denied during onboarding, just let the UI reflect it
+            val micDenied = results.containsKey(Manifest.permission.RECORD_AUDIO)
+                    && results[Manifest.permission.RECORD_AUDIO] == false
+            if (micDenied && !isOnboardingComplete()) {
+                // Don't finish — let user retry on the onboarding screen
             }
         }
 
-        val neededPermissions = mutableListOf<String>()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.RECORD_AUDIO)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.READ_CONTACTS)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.CALL_PHONE)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.READ_CALENDAR)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CALENDAR)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.WRITE_CALENDAR)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
-            != PackageManager.PERMISSION_GRANTED
-        ) neededPermissions.add(Manifest.permission.SEND_SMS)
-        if (neededPermissions.isNotEmpty()) {
-            permissionLauncher.launch(neededPermissions.toTypedArray())
-        }
+        val prefs = getSharedPreferences("alfred_onboarding", Context.MODE_PRIVATE)
 
         setContent {
             AlfredaiTheme {
-            var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-            var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
-            var audioLevel by remember { mutableFloatStateOf(0f) }
-
-            LaunchedEffect(Unit) {
-                brain.onConfirmationNeeded = { request ->
-                    runOnUiThread {
-                        currentConfirmation = request
-                        assistantState = AssistantState.AWAITING_CONFIRMATION
-                        speechHelper.speak(request.spokenPrompt)
-                    }
+                var onboardingDone by remember {
+                    mutableStateOf(prefs.getBoolean("onboarding_complete", false))
                 }
-            }
+                val granted by grantedPermissions
 
-            DisposableEffect(Unit) {
-                speechHelper = SpeechHelper(
-                    context = this@OverlayAssistActivity,
-                    onListeningStarted = {
-                        assistantState = AssistantState.LISTENING
+                AnimatedContent(
+                    targetState = onboardingDone,
+                    transitionSpec = {
+                        fadeIn(tween(500)) togetherWith fadeOut(tween(300))
                     },
-                    onResult = { text ->
-                        if (brain.isAwaitingSelection) {
-                            // Route voice input to the pending confirmation
-                            speechHelper.stopGracefully()
-                            currentConfirmation = null
-                            assistantState = AssistantState.PROCESSING
-                            brain.submitOptionSelection(text)
-                        } else {
-                            assistantState = AssistantState.PROCESSING
-                            scope.launch {
-                                val response = brain.processInput(text)
-                                if (brain.didRedirect) {
-                                    // Action opened another app — dismiss Alfred
-                                    finish()
-                                } else {
-                                    speechHelper.speak(response)
+                    label = "onboarding"
+                ) { done ->
+                    if (!done) {
+                        OnboardingScreen(
+                            grantedPermissions = granted,
+                            onRequestPermissions = { perms ->
+                                permissionLauncher.launch(perms.toTypedArray())
+                            },
+                            onFinish = {
+                                prefs.edit().putBoolean("onboarding_complete", true).apply()
+                                onboardingDone = true
+                                // Request any remaining permissions the user skipped
+                                val remaining = getAllRequiredPermissions()
+                                    .filter { ContextCompat.checkSelfPermission(this@OverlayAssistActivity, it) != PackageManager.PERMISSION_GRANTED }
+                                if (remaining.isNotEmpty()) {
+                                    permissionLauncher.launch(remaining.toTypedArray())
                                 }
                             }
-                        }
-                    },
-                    onSpeakingStarted = {
-                        runOnUiThread {
-                            if (assistantState != AssistantState.AWAITING_CONFIRMATION) {
-                                assistantState = AssistantState.SPEAKING
-                            }
-                        }
-                    },
-                    onSpeakingDone = {
-                        runOnUiThread {
-                            if (brain.isAwaitingSelection) {
-                                // Confirmation was just spoken — listen for user's choice
-                                assistantState = AssistantState.AWAITING_CONFIRMATION
-                                speechHelper.startListening()
-                            } else {
-                                assistantState = AssistantState.IDLE
-                                speechHelper.startListening()
-                            }
-                        }
-                    },
-                    onError = {
-                        runOnUiThread { assistantState = AssistantState.IDLE }
-                    },
-                    onAudioLevel = { level ->
-                        audioLevel = level
+                        )
+                    } else {
+                        AssistantContent(brain = brain)
                     }
-                )
-                speechHelper.init()
-
-                if (ContextCompat.checkSelfPermission(
-                        this@OverlayAssistActivity,
-                        Manifest.permission.RECORD_AUDIO
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    android.os.Handler(mainLooper).postDelayed({
-                        speechHelper.startListening()
-                    }, 300)
                 }
-
-                onDispose {
-                    speechHelper.shutdown()
-                }
-            }
-
-            OverlayAssistantScreen(
-                state = assistantState,
-                audioLevel = audioLevel,
-                confirmation = currentConfirmation,
-                brain = brain,
-                onMicTap = {
-                    when (assistantState) {
-                        AssistantState.LISTENING -> speechHelper.stopListening()
-                        AssistantState.IDLE -> speechHelper.startListening()
-                        AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
-                        else -> {}
-                    }
-                },
-                onOptionSelected = { selectedOption ->
-                    speechHelper.stopGracefully()
-                    currentConfirmation = null
-                    assistantState = AssistantState.PROCESSING
-                    brain.submitOptionSelection(selectedOption)
-                },
-                onDismiss = { finish() }
-            )
             }
         }
+    }
+
+    private fun isOnboardingComplete(): Boolean {
+        return getSharedPreferences("alfred_onboarding", Context.MODE_PRIVATE)
+            .getBoolean("onboarding_complete", false)
+    }
+
+    private fun getCurrentGrantedPermissions(): Set<String> {
+        val all = onboardingSteps.flatMap { it.permissions }.toSet()
+        return all.filter {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }.toSet()
+    }
+
+    private fun getAllRequiredPermissions(): List<String> {
+        return listOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.CALL_PHONE,
+            Manifest.permission.READ_CALENDAR,
+            Manifest.permission.WRITE_CALENDAR,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.SEND_SMS
+        )
+    }
+
+    @Composable
+    private fun AssistantContent(brain: AlfredBrain) {
+        var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
+        var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
+        var audioLevel by remember { mutableFloatStateOf(0f) }
+
+        LaunchedEffect(Unit) {
+            brain.onConfirmationNeeded = { request ->
+                runOnUiThread {
+                    currentConfirmation = request
+                    assistantState = AssistantState.AWAITING_CONFIRMATION
+                    speechHelper.speak(request.spokenPrompt)
+                }
+            }
+        }
+
+        DisposableEffect(Unit) {
+            speechHelper = SpeechHelper(
+                context = this@OverlayAssistActivity,
+                onListeningStarted = {
+                    assistantState = AssistantState.LISTENING
+                },
+                onResult = { text ->
+                    if (brain.isAwaitingSelection) {
+                        speechHelper.stopGracefully()
+                        currentConfirmation = null
+                        assistantState = AssistantState.PROCESSING
+                        brain.submitOptionSelection(text)
+                    } else {
+                        assistantState = AssistantState.PROCESSING
+                        scope.launch {
+                            val response = brain.processInput(text)
+                            if (brain.didRedirect) {
+                                finish()
+                            } else {
+                                speechHelper.speak(response)
+                            }
+                        }
+                    }
+                },
+                onSpeakingStarted = {
+                    runOnUiThread {
+                        if (assistantState != AssistantState.AWAITING_CONFIRMATION) {
+                            assistantState = AssistantState.SPEAKING
+                        }
+                    }
+                },
+                onSpeakingDone = {
+                    runOnUiThread {
+                        if (brain.isAwaitingSelection) {
+                            assistantState = AssistantState.AWAITING_CONFIRMATION
+                            speechHelper.startListening()
+                        } else {
+                            assistantState = AssistantState.IDLE
+                            speechHelper.startListening()
+                        }
+                    }
+                },
+                onError = {
+                    runOnUiThread { assistantState = AssistantState.IDLE }
+                },
+                onAudioLevel = { level ->
+                    audioLevel = level
+                }
+            )
+            speechHelper.init()
+
+            if (ContextCompat.checkSelfPermission(
+                    this@OverlayAssistActivity,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                android.os.Handler(mainLooper).postDelayed({
+                    speechHelper.startListening()
+                }, 300)
+            }
+
+            onDispose {
+                speechHelper.shutdown()
+            }
+        }
+
+        OverlayAssistantScreen(
+            state = assistantState,
+            audioLevel = audioLevel,
+            confirmation = currentConfirmation,
+            brain = brain,
+            onMicTap = {
+                when (assistantState) {
+                    AssistantState.LISTENING -> speechHelper.stopListening()
+                    AssistantState.IDLE -> speechHelper.startListening()
+                    AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
+                    else -> {}
+                }
+            },
+            onOptionSelected = { selectedOption ->
+                speechHelper.stopGracefully()
+                currentConfirmation = null
+                assistantState = AssistantState.PROCESSING
+                brain.submitOptionSelection(selectedOption)
+            },
+            onDismiss = { finish() }
+        )
     }
 }
