@@ -71,8 +71,12 @@ Search: search_apps, launch_app, open_settings, web_search, open_web_search, ope
 Weather: get_weather, get_weather_here.
 Payments: upi_payment (use phone@upi as UPI ID), launch_payment_app, list_payment_apps.
 Notifications: get_notifications, get_app_notifications, clear_notifications.
-Memory: remember_fact, recall_fact, get_all_memories, forget_fact, set_preference.
-Knowledge Graph: query_knowledge_graph.
+Memory: remember facts and preferences the user tells you (e.g. "my name is...", "I prefer..."). 
+Use create_memory to store anything the user wants you to remember. Use get_memory to search stored memories and knowledge graph.
+Use update_memory to change existing memories. Use delete_memory to forget something.
+The system automatically builds a knowledge graph from stored memories, extracting entities and relationships.
+When the user asks "what do you know about me" or similar, use get_memory to search the graph.
+Memory context is automatically injected — check it before asking the user for info you might already have.
 
 Today's date is provided in the conversation."""
     }
@@ -1043,25 +1047,79 @@ Today's date is provided in the conversation."""
             })
         })
 
-        // --- Memory ---
+        // --- Unified Memory (4 tools: create, get, update, delete) ---
+        // LLM extracts entities and relations itself — we just store them.
         tools.put(JSONObject().apply {
             put("type", "function")
             put("function", JSONObject().apply {
-                put("name", "remember_fact")
-                put("description", "Store a fact the user wants you to remember (e.g. 'my dog's name is Rex', 'my birthday is March 5'). Use a short key and the value.")
+                put("name", "create_memory")
+                put("description", """Store something the user wants you to remember. You MUST extract entities and relations from the fact yourself.
+Each entity needs a short name and a type (person, place, time, thing, concept, event, preference).
+Each relation links two entity names with a relationship verb.
+Always include a "user" entity of type "person" and link it to the subject.
+Example for "My friend John works at Google from 9am":
+  entities: [{name:"user",type:"person"},{name:"john",type:"person"},{name:"google",type:"place"},{name:"9am",type:"time"}]
+  relations: [{source:"user",relation:"knows",target:"john"},{source:"john",relation:"is_a",target:"friend"},{source:"john",relation:"works_at",target:"google"},{source:"john",relation:"start_time",target:"9am"}]
+Keep entity names short and lowercase. Use specific relation verbs (lives_in, works_at, has_name, goes_to, wake_time, likes, has_pet, etc.).""")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
-                        put("key", JSONObject().apply {
+                        put("content", JSONObject().apply {
                             put("type", "string")
-                            put("description", "Short key for the fact (e.g. 'dog_name', 'birthday')")
+                            put("description", "The full natural language fact or preference to store")
                         })
-                        put("value", JSONObject().apply {
+                        put("type", JSONObject().apply {
                             put("type", "string")
-                            put("description", "The fact to remember")
+                            put("enum", JSONArray().apply { put("fact"); put("preference") })
+                            put("description", "Memory type: 'fact' or 'preference'. Default: fact")
+                        })
+                        put("entities", JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Extracted entities from the fact")
+                            put("items", JSONObject().apply {
+                                put("type", "object")
+                                put("properties", JSONObject().apply {
+                                    put("name", JSONObject().apply {
+                                        put("type", "string")
+                                        put("description", "Short lowercase entity name (e.g. 'john', 'office', '10:30 am')")
+                                    })
+                                    put("type", JSONObject().apply {
+                                        put("type", "string")
+                                        put("description", "Entity type: person, place, time, thing, concept, event, preference")
+                                    })
+                                    put("attributes", JSONObject().apply {
+                                        put("type", "object")
+                                        put("description", "Optional key-value attributes for this entity (e.g. {\"recurring\":\"daily\"})")
+                                        put("additionalProperties", JSONObject().apply { put("type", "string") })
+                                    })
+                                })
+                                put("required", JSONArray().apply { put("name"); put("type") })
+                            })
+                        })
+                        put("relations", JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Relationships between entities")
+                            put("items", JSONObject().apply {
+                                put("type", "object")
+                                put("properties", JSONObject().apply {
+                                    put("source", JSONObject().apply {
+                                        put("type", "string")
+                                        put("description", "Source entity name (must match an entity name above)")
+                                    })
+                                    put("relation", JSONObject().apply {
+                                        put("type", "string")
+                                        put("description", "Relationship verb (e.g. 'has_name', 'lives_in', 'works_at', 'goes_to', 'likes')")
+                                    })
+                                    put("target", JSONObject().apply {
+                                        put("type", "string")
+                                        put("description", "Target entity name (must match an entity name above)")
+                                    })
+                                })
+                                put("required", JSONArray().apply { put("source"); put("relation"); put("target") })
+                            })
                         })
                     })
-                    put("required", JSONArray().apply { put("key"); put("value") })
+                    put("required", JSONArray().apply { put("content"); put("entities"); put("relations") })
                 })
             })
         })
@@ -1069,17 +1127,17 @@ Today's date is provided in the conversation."""
         tools.put(JSONObject().apply {
             put("type", "function")
             put("function", JSONObject().apply {
-                put("name", "recall_fact")
-                put("description", "Look up a previously stored fact.")
+                put("name", "get_memory")
+                put("description", "Search stored memories and knowledge graph by natural language query. Returns relevant facts, preferences, and entity relationships. Use for: recalling facts, checking preferences, finding connections, answering 'what do you know about X'.")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
-                        put("key", JSONObject().apply {
+                        put("query", JSONObject().apply {
                             put("type", "string")
-                            put("description", "The key of the fact to recall")
+                            put("description", "Natural language search query (e.g. 'my pets', 'where does John live', 'my preferences')")
                         })
                     })
-                    put("required", JSONArray().apply { put("key") })
+                    put("required", JSONArray().apply { put("query") })
                 })
             })
         })
@@ -1087,11 +1145,51 @@ Today's date is provided in the conversation."""
         tools.put(JSONObject().apply {
             put("type", "function")
             put("function", JSONObject().apply {
-                put("name", "get_all_memories")
-                put("description", "Get all stored facts and preferences.")
+                put("name", "update_memory")
+                put("description", """Update an existing memory. Provide the old content to find it, new content to replace, and new entities/relations to rebuild the graph.
+Extract entities and relations the same way as create_memory.""")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
-                    put("properties", JSONObject())
+                    put("properties", JSONObject().apply {
+                        put("old_content", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The existing memory to find (semantic match)")
+                        })
+                        put("new_content", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The updated memory content")
+                        })
+                        put("entities", JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Extracted entities from the NEW content")
+                            put("items", JSONObject().apply {
+                                put("type", "object")
+                                put("properties", JSONObject().apply {
+                                    put("name", JSONObject().apply { put("type", "string") })
+                                    put("type", JSONObject().apply { put("type", "string") })
+                                    put("attributes", JSONObject().apply {
+                                        put("type", "object")
+                                        put("additionalProperties", JSONObject().apply { put("type", "string") })
+                                    })
+                                })
+                                put("required", JSONArray().apply { put("name"); put("type") })
+                            })
+                        })
+                        put("relations", JSONObject().apply {
+                            put("type", "array")
+                            put("description", "Relationships between entities in the NEW content")
+                            put("items", JSONObject().apply {
+                                put("type", "object")
+                                put("properties", JSONObject().apply {
+                                    put("source", JSONObject().apply { put("type", "string") })
+                                    put("relation", JSONObject().apply { put("type", "string") })
+                                    put("target", JSONObject().apply { put("type", "string") })
+                                })
+                                put("required", JSONArray().apply { put("source"); put("relation"); put("target") })
+                            })
+                        })
+                    })
+                    put("required", JSONArray().apply { put("old_content"); put("new_content"); put("entities"); put("relations") })
                 })
             })
         })
@@ -1099,39 +1197,17 @@ Today's date is provided in the conversation."""
         tools.put(JSONObject().apply {
             put("type", "function")
             put("function", JSONObject().apply {
-                put("name", "forget_fact")
-                put("description", "Delete a previously stored fact.")
+                put("name", "delete_memory")
+                put("description", "Delete a stored memory. Finds the closest matching memory and removes it. Pass content='all' to delete ALL memories and clear the entire knowledge graph.")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
-                        put("key", JSONObject().apply {
+                        put("content", JSONObject().apply {
                             put("type", "string")
-                            put("description", "The key of the fact to forget")
+                            put("description", "The memory to delete (semantic match, doesn't need to be exact)")
                         })
                     })
-                    put("required", JSONArray().apply { put("key") })
-                })
-            })
-        })
-
-        tools.put(JSONObject().apply {
-            put("type", "function")
-            put("function", JSONObject().apply {
-                put("name", "set_preference")
-                put("description", "Store a user preference (e.g. preferred language, temperature unit, nickname).")
-                put("parameters", JSONObject().apply {
-                    put("type", "object")
-                    put("properties", JSONObject().apply {
-                        put("key", JSONObject().apply {
-                            put("type", "string")
-                            put("description", "Preference key (e.g. 'temperature_unit', 'nickname')")
-                        })
-                        put("value", JSONObject().apply {
-                            put("type", "string")
-                            put("description", "Preference value")
-                        })
-                    })
-                    put("required", JSONArray().apply { put("key"); put("value") })
+                    put("required", JSONArray().apply { put("content") })
                 })
             })
         })
@@ -1165,27 +1241,6 @@ Today's date is provided in the conversation."""
                         })
                     })
                     put("required", JSONArray().apply { put("prompt"); put("options"); put("button_styles") })
-                })
-            })
-        })
-
-        return tools
-
-        // --- Knowledge Graph ---
-        tools.put(JSONObject().apply {
-            put("type", "function")
-            put("function", JSONObject().apply {
-                put("name", "query_knowledge_graph")
-                put("description", "Query the on-device knowledge graph to find entities and relationships related to a topic. Use this to look up connections between things the user has told you about (e.g. 'what do you know about my family', 'what are my hobbies').")
-                put("parameters", JSONObject().apply {
-                    put("type", "object")
-                    put("properties", JSONObject().apply {
-                        put("topic", JSONObject().apply {
-                            put("type", "string")
-                            put("description", "The topic or entity to search for in the knowledge graph")
-                        })
-                    })
-                    put("required", JSONArray().apply { put("topic") })
                 })
             })
         })
