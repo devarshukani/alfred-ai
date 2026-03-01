@@ -53,6 +53,7 @@ fun RichCardBox(
                 modifier = Modifier
                     .padding(horizontal = 20.dp)
                     .fillMaxWidth()
+                    .imePadding()
                     .clip(CardShape)
                     .background(CardBg)
                     .border(0.5.dp, CardBorder, CardShape)
@@ -143,7 +144,7 @@ private fun RenderBlock(
         is RichBlock.ButtonCancel -> CancelTextButton(block.label) { onAction(block.actionId) }
 
         is RichBlock.Toggle -> ToggleBlock(block.label, block.key, block.defaultOn, onToggle)
-        is RichBlock.TextField -> TextFieldBlock(block.placeholder, block.key, onTextInput)
+        is RichBlock.TextField -> TextFieldBlock(block.placeholder, block.key, block.defaultValue, onTextInput)
 
         is RichBlock.Carousel -> CarouselBlock(block.items, onAction)
         is RichBlock.ChipRow -> ChipRowBlock(block.chips)
@@ -325,8 +326,10 @@ private fun ToggleBlock(label: String, key: String, defaultOn: Boolean, onToggle
 }
 
 @Composable
-private fun TextFieldBlock(placeholder: String, key: String, onTextInput: (String, String) -> Unit) {
-    var text by remember { mutableStateOf("") }
+private fun TextFieldBlock(placeholder: String, key: String, defaultValue: String, onTextInput: (String, String) -> Unit) {
+    var text by remember { mutableStateOf(defaultValue) }
+    // Emit initial value so it's captured even if user doesn't edit
+    LaunchedEffect(Unit) { if (defaultValue.isNotBlank()) onTextInput(key, defaultValue) }
     OutlinedTextField(
         value = text,
         onValueChange = {
