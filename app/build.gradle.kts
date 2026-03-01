@@ -45,6 +45,7 @@ android {
             FileInputStream(localProps).use { props.load(it) }
         }
         buildConfigField("String", "MISTRAL_API_KEY", "\"${props.getProperty("MISTRAL_API_KEY", "")}\"")
+        buildConfigField("String", "MISTRAL_AGENT_ID", "\"${props.getProperty("MISTRAL_AGENT_ID", "")}\"")
     }
 
     buildTypes {

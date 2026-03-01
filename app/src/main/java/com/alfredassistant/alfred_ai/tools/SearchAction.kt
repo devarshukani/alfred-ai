@@ -1,34 +1,36 @@
 package com.alfredassistant.alfred_ai.tools
 
-import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import android.provider.ContactsContract
 import android.provider.Settings
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONArray
-import org.json.JSONObject
+import android.util.Log
+import com.alfredassistant.alfred_ai.BuildConfig
 import com.alfredassistant.alfred_ai.skills.Param
 import com.alfredassistant.alfred_ai.skills.ToolDef
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class SearchAction(private val context: Context) {
 
+    companion object {
+        private const val TAG = "SearchAction"
+        private const val CONVERSATIONS_URL = "https://api.mistral.ai/v1/conversations"
+    }
+
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    // ==================== DEVICE SEARCH ====================
+    private val jsonType = "application/json".toMediaType()
 
-    /**
-     * Search installed apps by name. Returns matching app names + package names.
-     */
     fun searchApps(query: String): String {
         val pm = context.packageManager
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -48,9 +50,6 @@ class SearchAction(private val context: Context) {
         else JSONArray(matches).toString()
     }
 
-    /**
-     * Launch an app by package name.
-     */
     fun launchApp(packageName: String): String {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName)
         return if (intent != null) {
@@ -62,9 +61,6 @@ class SearchAction(private val context: Context) {
         }
     }
 
-    /**
-     * Open a specific system settings page.
-     */
     fun openSettings(settingsType: String): String {
         val action = when (settingsType.lowercase()) {
             "wifi", "network" -> Settings.ACTION_WIFI_SETTINGS
@@ -84,9 +80,7 @@ class SearchAction(private val context: Context) {
             "notification", "notifications" -> Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS
             else -> Settings.ACTION_SETTINGS
         }
-        val intent = Intent(action).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
+        val intent = Intent(action).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
         return try {
             context.startActivity(intent)
             "Settings opened."
@@ -99,135 +93,111 @@ class SearchAction(private val context: Context) {
     }
 
     /**
-     * Search contacts by name (reuses phone contacts query but returns email + phone).
-     */
-    fun searchContacts(query: String): String {
-        val results = JSONArray()
-        val cursor = context.contentResolver.query(
-            ContactsContract.Contacts.CONTENT_URI,
-            null,
-            "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} LIKE ?",
-            arrayOf("%$query%"),
-            "${ContactsContract.Contacts.DISPLAY_NAME_PRIMARY} ASC"
-        )
-        cursor?.use {
-            var count = 0
-            while (it.moveToNext() && count < 10) {
-                val name = it.getString(
-                    it.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY)
-                ) ?: continue
-                results.put(JSONObject().apply { put("name", name) })
-                count++
-            }
-        }
-        return if (results.length() == 0) "No contacts found matching \"$query\"."
-        else results.toString()
-    }
-
-    // ==================== WEB SEARCH ====================
-
-    /**
-     * Perform a web search and return summarizable snippets.
-     * Uses DuckDuckGo Instant Answer API (no API key needed).
+     * Web search via Mistral's pre-created web_search agent.
+     * Calls POST /v1/conversations with the agent ID from BuildConfig.
      */
     suspend fun webSearch(query: String): String = withContext(Dispatchers.IO) {
         try {
-            // DuckDuckGo Instant Answer API
-            val url = "https://api.duckduckgo.com/?q=${Uri.encode(query)}&format=json&no_html=1&skip_disambig=1"
-            val request = Request.Builder().url(url).build()
+            val agentId = BuildConfig.MISTRAL_AGENT_ID
+            if (agentId.isBlank()) {
+                return@withContext "Web search agent not configured. Add MISTRAL_AGENT_ID to local.properties."
+            }
+
+            val body = JSONObject().apply {
+                put("agent_id", agentId)
+                put("inputs", query)
+                put("stream", false)
+                put("store", false)
+            }
+
+            val request = Request.Builder()
+                .url(CONVERSATIONS_URL)
+                .addHeader("Authorization", "Bearer ${BuildConfig.MISTRAL_API_KEY}")
+                .addHeader("Content-Type", "application/json")
+                .post(body.toString().toRequestBody(jsonType))
+                .build()
+
             val response = httpClient.newCall(request).execute()
-            val body = response.body?.string() ?: ""
-            val json = JSONObject(body)
+            val responseBody = response.body?.string() ?: ""
 
-            val results = mutableListOf<String>()
-
-            // Abstract (main answer)
-            val abstract = json.optString("AbstractText", "")
-            if (abstract.isNotBlank()) {
-                results.add(abstract)
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Search failed: ${response.code} $responseBody")
+                return@withContext "Web search failed: HTTP ${response.code}"
             }
 
-            // Answer (instant answer)
-            val answer = json.optString("Answer", "")
-            if (answer.isNotBlank()) {
-                results.add(answer)
-            }
-
-            // Related topics
-            val relatedTopics = json.optJSONArray("RelatedTopics")
-            if (relatedTopics != null) {
-                for (i in 0 until minOf(relatedTopics.length(), 3)) {
-                    val topic = relatedTopics.optJSONObject(i)
-                    val text = topic?.optString("Text", "") ?: ""
-                    if (text.isNotBlank()) results.add(text)
-                }
-            }
-
-            if (results.isEmpty()) {
-                "No instant results found. Opening web search."
-            } else {
-                results.joinToString("\n\n")
-            }
+            parseSearchResponse(responseBody)
         } catch (e: Exception) {
+            Log.e(TAG, "Web search error", e)
             "Web search failed: ${e.message}"
         }
     }
 
-    /**
-     * Open a web search in the browser.
-     */
-    fun openWebSearch(query: String) {
-        val intent = Intent(Intent.ACTION_WEB_SEARCH).apply {
-            putExtra(SearchManager.QUERY, query)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        try {
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            // Fallback to browser
-            val browserIntent = Intent(Intent.ACTION_VIEW,
-                Uri.parse("https://www.google.com/search?q=${Uri.encode(query)}")
-            ).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            context.startActivity(browserIntent)
-        }
-    }
+    private fun parseSearchResponse(responseBody: String): String {
+        val json = JSONObject(responseBody)
+        val outputs = json.optJSONArray("outputs") ?: return "No results."
 
-    /**
-     * Open a URL in the browser.
-     */
-    fun openUrl(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        val textParts = mutableListOf<String>()
+        val sources = mutableListOf<String>()
+
+        for (i in 0 until outputs.length()) {
+            val output = outputs.getJSONObject(i)
+            if (output.optString("type") != "message.output") continue
+
+            val content = output.optJSONArray("content") ?: continue
+            for (j in 0 until content.length()) {
+                val chunk = content.getJSONObject(j)
+                when (chunk.optString("type")) {
+                    "text" -> {
+                        val text = chunk.optString("text", "")
+                        if (text.isNotBlank()) textParts.add(text)
+                    }
+                    "tool_reference" -> {
+                        val title = chunk.optString("title", "")
+                        val url = chunk.optString("url", "")
+                        if (title.isNotBlank() || url.isNotBlank()) {
+                            sources.add("$title: $url")
+                        }
+                    }
+                }
+            }
         }
-        context.startActivity(intent)
+
+        val answer = textParts.joinToString("").trim()
+        Log.d(TAG, "Parsed: ${answer.take(100)}... (${sources.size} sources)")
+
+        return buildString {
+            append(answer)
+            if (sources.isNotEmpty()) {
+                append("\n\nSources:")
+                sources.forEach { append("\n- $it") }
+            }
+        }
     }
 
     fun toolDefs(): List<ToolDef> = listOf(
-        ToolDef(name = "search_apps", description = "Search installed apps by name. Returns app names and package names.",
+        ToolDef(
+            name = "search_apps",
+            description = "Search installed apps by name. Returns app names and package names.",
             parameters = listOf(Param(name = "query", type = "string", description = "App name to search for")),
             required = listOf("query")
         ) { args -> searchApps(args.getString("query")) },
-        ToolDef(name = "launch_app", description = "Launch an app by its package name. Use search_apps first to find the package name.",
+        ToolDef(
+            name = "launch_app",
+            description = "Launch an app by its package name. Use search_apps first to find the package name.",
             parameters = listOf(Param(name = "package_name", type = "string", description = "The package name of the app")),
             required = listOf("package_name")
         ) { args -> launchApp(args.getString("package_name")) },
-        ToolDef(name = "open_settings", description = "Open a specific system settings page. Supported: wifi, bluetooth, display, sound, battery, storage, apps, location, security, accessibility, date, language, developer, nfc, notifications.",
+        ToolDef(
+            name = "open_settings",
+            description = "Open a specific system settings page. Supported: wifi, bluetooth, display, sound, battery, storage, apps, location, security, accessibility, date, language, developer, nfc, notifications.",
             parameters = listOf(Param(name = "settings_type", type = "string", description = "The type of settings to open")),
             required = listOf("settings_type")
         ) { args -> openSettings(args.getString("settings_type")) },
-        ToolDef(name = "web_search", description = "Search the web for information. Returns text snippets. Use for factual questions, current events, definitions.",
+        ToolDef(
+            name = "web_search",
+            description = "Search the web for information using AI-powered search. Returns a detailed answer with source citations. Use for factual questions, current events, news, definitions, how-to questions.",
             parameters = listOf(Param(name = "query", type = "string", description = "The search query")),
             required = listOf("query")
-        ) { args -> webSearch(args.getString("query")) },
-        ToolDef(name = "open_web_search", description = "Open a web search in the browser for the user to browse results.",
-            parameters = listOf(Param(name = "query", type = "string", description = "The search query")),
-            required = listOf("query")
-        ) { args -> openWebSearch(args.getString("query")); "Browser opened." },
-        ToolDef(name = "open_url", description = "Open a specific URL in the browser.",
-            parameters = listOf(Param(name = "url", type = "string", description = "The URL to open")),
-            required = listOf("url")
-        ) { args -> openUrl(args.getString("url")); "URL opened." }
+        ) { args -> webSearch(args.getString("query")) }
     )
 }
