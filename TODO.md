@@ -48,7 +48,7 @@
 ### Improve UI
 - [x] **Remove Orb UI** — Deleted AlfredOrb.kt and InterfaceMode enum, wave bar is now the only interface
 - [ ] **Spring physics** — Add spring-based animations (Compose `spring()` specs) to wave bar and UI transitions for more organic, bouncy feel
-- [ ] **Drop Batman aesthetic** — Restyle the interactive interface away from dark/gold butler theme to a modern, clean, friendly design (new color palette, softer tones)
+- [x] **Drop Batman aesthetic** — Restyle the interactive interface away from dark/gold butler theme to a modern, clean, friendly design (new color palette, softer tones)
 - [ ] **Dynamic form creation** — AI can generate interactive UI elements on the fly (input fields, toggles, sliders, date pickers) based on context instead of hardcoded confirmation boxes
 - [ ] **Fully dynamic interactive interface** — All user-facing UI (confirmations, options, forms) should be driven by AI tool calls, not static layouts
 

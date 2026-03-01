@@ -15,5 +15,7 @@ enum class AssistantState {
 data class ConfirmationRequest(
     val prompt: String,
     val options: List<String>,
-    val buttonStyles: List<String> = emptyList() // "primary", "secondary", or "cancel"
+    val buttonStyles: List<String> = emptyList(), // "primary", "secondary", or "cancel"
+    /** Abbreviated version of prompt for TTS (phone numbers shortened, etc.) */
+    val spokenPrompt: String = prompt
 )
