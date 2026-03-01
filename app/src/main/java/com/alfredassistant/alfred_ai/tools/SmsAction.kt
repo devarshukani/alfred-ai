@@ -3,6 +3,7 @@ package com.alfredassistant.alfred_ai.tools
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.telephony.SmsManager
 import com.alfredassistant.alfred_ai.skills.Param
 import com.alfredassistant.alfred_ai.skills.ToolDef
@@ -18,7 +19,10 @@ class SmsAction(private val context: Context) {
      */
     fun sendSms(phoneNumber: String, message: String): String {
         return try {
-            val smsManager = SmsManager.getDefault()
+            @Suppress("DEPRECATION")
+            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                context.getSystemService(SmsManager::class.java)
+            else SmsManager.getDefault()
             // Split long messages into parts
             val parts = smsManager.divideMessage(message)
             if (parts.size == 1) {
@@ -58,7 +62,7 @@ class SmsAction(private val context: Context) {
     fun toolDefs(): List<ToolDef> = listOf(
         ToolDef(
             name = "send_sms",
-            description = "Send an SMS text message directly to a phone number. Requires confirmation via present_options first.",
+            description = "Send an SMS text message directly to a phone number. Confirm with show_card first.",
             parameters = listOf(
                 Param(name = "phone_number", type = "string", description = "The recipient's phone number"),
                 Param(name = "message", type = "string", description = "The text message to send")

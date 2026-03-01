@@ -58,7 +58,7 @@ sealed class RichBlock {
     data class Toggle(val label: String, val key: String, val defaultOn: Boolean = false) : RichBlock()
 
     /** Single-line text input */
-    data class TextField(val placeholder: String, val key: String) : RichBlock()
+    data class TextField(val placeholder: String, val key: String, val defaultValue: String = "") : RichBlock()
 
     /** Horizontal carousel of sub-cards */
     data class Carousel(val items: List<CarouselItem>) : RichBlock()
