@@ -61,6 +61,7 @@ Do NOT use present_options for: info queries, opening apps, reading calendar, me
 
 TOOLS:
 Phone: search_contacts, make_call, dial_number.
+SMS: send_sms (sends directly), open_sms_app (opens messaging app). When user says "text" or "message" someone, search their contact first, then use send_sms after confirming with present_options.
 Alarms: set_alarm (days: Sun=1..Sat=7), dismiss_alarm, snooze_alarm, show_alarms.
 Timers: set_timer (seconds), show_timers. Stopwatch: start_stopwatch.
 Calculator: evaluate_expression, convert_unit.
@@ -381,6 +382,53 @@ Today's date is provided in the conversation."""
                         put("phone_number", JSONObject().apply {
                             put("type", "string")
                             put("description", "The phone number to dial")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("phone_number") })
+                })
+            })
+        })
+
+        // --- SMS ---
+        // send_sms
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "send_sms")
+                put("description", "Send an SMS text message directly to a phone number. Use this when user wants to send/text a message to someone. Requires confirmation via present_options first.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("phone_number", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The recipient's phone number")
+                        })
+                        put("message", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The text message to send")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("phone_number"); put("message") })
+                })
+            })
+        })
+
+        // open_sms_app
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "open_sms_app")
+                put("description", "Open the default messaging app with a phone number and optional pre-filled message. Use when user wants to compose a longer message or review before sending.")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("phone_number", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The recipient's phone number")
+                        })
+                        put("message", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "Optional pre-filled message text")
                         })
                     })
                     put("required", JSONArray().apply { put("phone_number") })
