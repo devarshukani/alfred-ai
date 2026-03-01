@@ -22,9 +22,11 @@ fun WaveAssistantScreen(
     state: AssistantState,
     audioLevel: Float,
     confirmation: ConfirmationRequest?,
+    richCard: RichCard?,
     brain: AlfredBrain?,
     onMicTap: () -> Unit,
     onOptionSelected: (String) -> Unit,
+    onCardAction: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -91,6 +93,17 @@ fun WaveAssistantScreen(
                         onOptionSelected(option)
                     }
                 },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 140.dp)
+            )
+
+            // Rich card above the wave bar
+            RichCardBox(
+                richCard = richCard,
+                onAction = onCardAction,
+                onToggle = { _, _ -> },
+                onTextInput = { _, _ -> },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 140.dp)

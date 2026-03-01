@@ -6,6 +6,7 @@ import com.alfredassistant.alfred_ai.embedding.EmbeddingModel
 import com.alfredassistant.alfred_ai.skills.*
 import com.alfredassistant.alfred_ai.tools.*
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import com.alfredassistant.alfred_ai.ui.RichCard
 import kotlinx.coroutines.CompletableDeferred
 
 class AlfredBrain(context: Context) {
@@ -23,11 +24,21 @@ class AlfredBrain(context: Context) {
     // Confirmation skill needs special wiring for UI callbacks
     private val confirmationSkill = ConfirmationSkill()
 
+    // Display skill for rich visual cards
+    private val displaySkill = DisplaySkill()
+
     // Callback for when AI wants to show options to the user
     var onConfirmationNeeded: ((ConfirmationRequest) -> Unit)? = null
         set(value) {
             field = value
             confirmationSkill.onConfirmationNeeded = value
+        }
+
+    // Callback for when AI wants to show a rich visual card
+    var onDisplayCard: ((RichCard) -> Unit)? = null
+        set(value) {
+            field = value
+            displaySkill.onDisplayCard = value
         }
 
     // Callback for when a redirecting action was performed
@@ -58,6 +69,7 @@ class AlfredBrain(context: Context) {
         // Register all skills — each skill owns its tool definitions and execution
         skillRegistry.registerSkill(MemorySkill(memoryStore))
         skillRegistry.registerSkill(confirmationSkill)
+        skillRegistry.registerSkill(displaySkill)
         skillRegistry.registerSkill(PhoneSkill(phoneAction))
         skillRegistry.registerSkill(SmsSkill(SmsAction(context), phoneAction))
         skillRegistry.registerSkill(AlarmSkill(AlarmAction(context)))
@@ -78,6 +90,13 @@ class AlfredBrain(context: Context) {
 
     val isAwaitingSelection: Boolean
         get() = confirmationSkill.pendingSelection?.isActive == true
+
+    fun submitCardAction(actionId: String) {
+        displaySkill.submitAction(actionId)
+    }
+
+    val isAwaitingCardAction: Boolean
+        get() = displaySkill.isAwaitingAction
 
     companion object {
         private val REDIRECTING_TOOLS = setOf(
@@ -140,7 +159,8 @@ class AlfredBrain(context: Context) {
         return try {
             skillRegistry.executeTool(call.functionName, call.arguments)
         } catch (e: Exception) {
-            "Error executing ${call.functionName}: ${e.message}"
+            val safeMsg = e.message?.take(80)?.replace(Regex("[{\"\\[\\]\\\\]"), "") ?: "unknown error"
+            "Error executing ${call.functionName}: $safeMsg"
         }
     }
 

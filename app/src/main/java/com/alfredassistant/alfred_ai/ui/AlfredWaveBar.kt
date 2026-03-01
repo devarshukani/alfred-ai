@@ -104,6 +104,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> 0.42f
         AssistantState.SPEAKING -> 0.70f
         AssistantState.AWAITING_CONFIRMATION -> 0.38f
+        AssistantState.DISPLAYING_CARD -> 0.38f
     }, tw, label = "aR")
 
     // Glow radius multiplier
@@ -113,6 +114,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> 0.32f
         AssistantState.SPEAKING -> 0.50f
         AssistantState.AWAITING_CONFIRMATION -> 0.30f
+        AssistantState.DISPLAYING_CARD -> 0.30f
     }, tw, label = "aGR")
 
     // Drift amplitude
@@ -122,6 +124,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> 0.10f
         AssistantState.SPEAKING -> 0.18f
         AssistantState.AWAITING_CONFIRMATION -> 0.04f
+        AssistantState.DISPLAYING_CARD -> 0.04f
     }, tw, label = "aDf")
 
     // Peak alpha for glow blobs
@@ -131,6 +134,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> 0.45f
         AssistantState.SPEAKING -> 0.75f
         AssistantState.AWAITING_CONFIRMATION -> 0.38f
+        AssistantState.DISPLAYING_CARD -> 0.38f
     }, tw, label = "aGA")
 
     // Core brightness (the bright white-ish center at the very bottom)
@@ -140,6 +144,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> 0.40f
         AssistantState.SPEAKING -> 0.70f
         AssistantState.AWAITING_CONFIRMATION -> 0.30f
+        AssistantState.DISPLAYING_CARD -> 0.30f
     }, tw, label = "aCA")
 
     // Colors per state
@@ -150,6 +155,7 @@ fun AlfredWaveBar(
         AssistantState.PROCESSING -> C5(WavePurple, WaveBlue, WavePink, WaveCyan, WavePurple)
         AssistantState.SPEAKING -> C5(WaveOrange, WaveYellow, WaveRed, WavePink, WaveOrange)
         AssistantState.AWAITING_CONFIRMATION -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
+        AssistantState.DISPLAYING_CARD -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
     }
     val c1 by animateColorAsState(tc.a, ctw, label = "c1")
     val c2 by animateColorAsState(tc.b, ctw, label = "c2")

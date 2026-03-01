@@ -5,7 +5,8 @@ enum class AssistantState {
     LISTENING,
     PROCESSING,
     SPEAKING,
-    AWAITING_CONFIRMATION
+    AWAITING_CONFIRMATION,
+    DISPLAYING_CARD
 }
 
 /**

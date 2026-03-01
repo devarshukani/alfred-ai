@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationBox
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import com.alfredassistant.alfred_ai.ui.RichCard
+import com.alfredassistant.alfred_ai.ui.RichCardBox
 import com.alfredassistant.alfred_ai.ui.theme.*
 import kotlin.math.*
 
@@ -44,8 +46,10 @@ fun CoverWaveScreen(
     state: AssistantState,
     audioLevel: Float,
     confirmation: ConfirmationRequest?,
+    richCard: RichCard?,
     onMicTap: () -> Unit,
     onOptionSelected: (String) -> Unit,
+    onCardAction: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,6 +74,16 @@ fun CoverWaveScreen(
         ConfirmationBox(
             confirmation = confirmation,
             onOptionSelected = onOptionSelected,
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(horizontal = 12.dp)
+        )
+
+        RichCardBox(
+            richCard = richCard,
+            onAction = onCardAction,
+            onToggle = { _, _ -> },
+            onTextInput = { _, _ -> },
             modifier = Modifier
                 .align(Alignment.Center)
                 .padding(horizontal = 12.dp)
@@ -124,6 +138,8 @@ private fun FullScreenWaveCanvas(
         AssistantState.PROCESSING -> 1.4f
         AssistantState.SPEAKING -> 1.9f
         AssistantState.AWAITING_CONFIRMATION -> 1.3f
+        AssistantState.DISPLAYING_CARD -> 1.3f
+        AssistantState.DISPLAYING_CARD -> 1.3f
     }, tw, label = "aGR")
 
     val aDrift by animateFloatAsState(when (state) {
@@ -132,6 +148,7 @@ private fun FullScreenWaveCanvas(
         AssistantState.PROCESSING -> 0.14f
         AssistantState.SPEAKING -> 0.25f
         AssistantState.AWAITING_CONFIRMATION -> 0.10f
+        AssistantState.DISPLAYING_CARD -> 0.10f
     }, tw, label = "aDf")
 
     val aGlowAlpha by animateFloatAsState(when (state) {
@@ -140,6 +157,7 @@ private fun FullScreenWaveCanvas(
         AssistantState.PROCESSING -> 0.60f
         AssistantState.SPEAKING -> 0.90f
         AssistantState.AWAITING_CONFIRMATION -> 0.52f
+        AssistantState.DISPLAYING_CARD -> 0.52f
     }, tw, label = "aGA")
 
     val aCoreAlpha by animateFloatAsState(when (state) {
@@ -148,6 +166,7 @@ private fun FullScreenWaveCanvas(
         AssistantState.PROCESSING -> 0.40f
         AssistantState.SPEAKING -> 0.70f
         AssistantState.AWAITING_CONFIRMATION -> 0.30f
+        AssistantState.DISPLAYING_CARD -> 0.30f
     }, tw, label = "aCA")
 
     data class C5(val a: Color, val b: Color, val c: Color, val d: Color, val e: Color)
@@ -158,6 +177,7 @@ private fun FullScreenWaveCanvas(
         AssistantState.PROCESSING -> C5(WavePurple, WaveBlue, WavePink, WaveCyan, WavePurple)
         AssistantState.SPEAKING -> C5(WaveOrange, WaveYellow, WaveRed, WavePink, WaveOrange)
         AssistantState.AWAITING_CONFIRMATION -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
+        AssistantState.DISPLAYING_CARD -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
     }
     val colors = listOf(
         animateColorAsState(tc.a, ctw, label = "c0").value,
