@@ -1,0 +1,430 @@
+package com.alfredassistant.alfred_ai.ui
+
+import android.Manifest
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.alfredassistant.alfred_ai.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.exp
+import kotlin.math.pow
+import kotlin.math.sin
+
+// ── Data ──
+
+data class OnboardingStep(
+    val title: String,
+    val description: String,
+    val permissions: List<String>,
+    val accentColor: Color,
+    val icon: String,       // emoji for simplicity
+    val optional: Boolean = false
+)
+
+val onboardingSteps = listOf(
+    OnboardingStep(
+        title = "Voice",
+        description = "Alfred listens and speaks.\nGrant microphone access to have a natural conversation.",
+        permissions = listOf(Manifest.permission.RECORD_AUDIO),
+        accentColor = WaveBlue,
+        icon = "🎙️"
+    ),
+    OnboardingStep(
+        title = "Phone & Contacts",
+        description = "Make calls and find contacts hands-free.\nAlfred can dial anyone in your phonebook.",
+        permissions = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE),
+        accentColor = WaveGreen,
+        icon = "📞"
+    ),
+    OnboardingStep(
+        title = "Calendar",
+        description = "Schedule events and check your agenda.\nAlfred manages your calendar by voice.",
+        permissions = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
+        accentColor = WaveYellow,
+        icon = "📅"
+    ),
+    OnboardingStep(
+        title = "Messages",
+        description = "Send texts without touching your phone.\nJust tell Alfred who and what.",
+        permissions = listOf(Manifest.permission.SEND_SMS),
+        accentColor = WavePurple,
+        icon = "💬"
+    ),
+    OnboardingStep(
+        title = "Location",
+        description = "Weather, directions, and local info.\nAlfred uses your location to stay relevant.",
+        permissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION),
+        accentColor = WaveCyan,
+        icon = "📍",
+        optional = true
+    )
+)
+
+// ── Main composable ──
+
+@Composable
+fun OnboardingScreen(
+    grantedPermissions: Set<String>,
+    onRequestPermissions: (List<String>) -> Unit,
+    onFinish: () -> Unit
+) {
+    var currentPage by remember { mutableIntStateOf(0) }
+    val step = onboardingSteps[currentPage]
+    val isLast = currentPage == onboardingSteps.lastIndex
+
+    // Check if current step's permissions are all granted
+    val stepGranted = step.permissions.all { it in grantedPermissions }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(AlfredBlack)
+    ) {
+        // Animated background glow
+        AnimatedGlow(color = step.accentColor)
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(horizontal = 32.dp)
+        ) {
+            Spacer(Modifier.weight(0.15f))
+
+            // Animated icon
+            AnimatedIcon(icon = step.icon, color = step.accentColor, key = currentPage)
+
+            Spacer(Modifier.height(40.dp))
+
+            // Title
+            AnimatedContent(
+                targetState = step.title,
+                transitionSpec = {
+                    (fadeIn(tween(400)) + slideInHorizontally(tween(400)) { it / 3 })
+                        .togetherWith(fadeOut(tween(200)) + slideOutHorizontally(tween(200)) { -it / 3 })
+                },
+                label = "title"
+            ) { title ->
+                Text(
+                    text = title,
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 32.sp,
+                    color = AlfredTextPrimary,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Description
+            AnimatedContent(
+                targetState = step.description,
+                transitionSpec = {
+                    (fadeIn(tween(500, delayMillis = 100)))
+                        .togetherWith(fadeOut(tween(200)))
+                },
+                label = "desc"
+            ) { desc ->
+                Text(
+                    text = desc,
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                    color = AlfredTextSecondary,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(Modifier.weight(0.15f))
+
+            // Grant Access / Already Granted button
+            PermissionButton(
+                granted = stepGranted,
+                accentColor = step.accentColor,
+                optional = step.optional,
+                onClick = {
+                    if (!stepGranted) {
+                        onRequestPermissions(step.permissions)
+                    }
+                }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            // Navigation row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Skip / Back
+                if (currentPage > 0) {
+                    Text(
+                        text = "Back",
+                        fontFamily = PlusJakartaSans,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 15.sp,
+                        color = AlfredTextDim,
+                        modifier = Modifier
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { currentPage-- }
+                            .padding(12.dp)
+                    )
+                } else {
+                    Spacer(Modifier.width(60.dp))
+                }
+
+                // Page dots
+                PageDots(
+                    total = onboardingSteps.size,
+                    current = currentPage,
+                    accentColor = step.accentColor
+                )
+
+                // Next / Get Started
+                Text(
+                    text = if (isLast) "Start" else "Next",
+                    fontFamily = PlusJakartaSans,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = step.accentColor,
+                    modifier = Modifier
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            if (isLast) onFinish() else currentPage++
+                        }
+                        .padding(12.dp)
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+// ── Animated background glow ──
+
+@Composable
+private fun AnimatedGlow(color: Color) {
+    val inf = rememberInfiniteTransition(label = "glow")
+    val breathe by inf.animateFloat(
+        0.6f, 1f,
+        infiniteRepeatable(tween(3000, easing = EaseInOut), RepeatMode.Reverse),
+        label = "breathe"
+    )
+    val drift by inf.animateFloat(
+        0f, 2f * PI.toFloat(),
+        infiniteRepeatable(tween(6000, easing = LinearEasing), RepeatMode.Restart),
+        label = "drift"
+    )
+
+    val animColor by animateColorAsState(
+        targetValue = color.copy(alpha = 0.15f),
+        animationSpec = tween(600),
+        label = "glowColor"
+    )
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cx = size.width * 0.5f + sin(drift) * size.width * 0.08f
+        val cy = size.height * 0.30f
+        val radius = size.width * 0.9f * breathe
+
+        val stops = Array(48) { i ->
+            val t = i / 47f
+            val falloff = exp(-(t / 0.45f).pow(2)).toFloat()
+            t to lerp(Color.Transparent, animColor, falloff)
+        }
+        drawCircle(
+            brush = Brush.radialGradient(
+                colorStops = stops,
+                center = Offset(cx, cy),
+                radius = radius
+            ),
+            radius = radius,
+            center = Offset(cx, cy)
+        )
+    }
+}
+
+// ── Animated icon with pulse ring ──
+
+@Composable
+private fun AnimatedIcon(icon: String, color: Color, key: Int) {
+    val inf = rememberInfiniteTransition(label = "iconPulse")
+    val ringScale by inf.animateFloat(
+        1f, 1.5f,
+        infiniteRepeatable(tween(2000, easing = EaseOut), RepeatMode.Restart),
+        label = "ring"
+    )
+    val ringAlpha by inf.animateFloat(
+        0.4f, 0f,
+        infiniteRepeatable(tween(2000, easing = EaseOut), RepeatMode.Restart),
+        label = "ringA"
+    )
+
+    // Entry animation
+    var visible by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        visible = false
+        delay(50)
+        visible = true
+    }
+    val entryScale by animateFloatAsState(
+        targetValue = if (visible) 1f else 0.5f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 300f),
+        label = "entryScale"
+    )
+    val entryAlpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(300),
+        label = "entryAlpha"
+    )
+
+    val animColor by animateColorAsState(
+        targetValue = color,
+        animationSpec = tween(500),
+        label = "iconColor"
+    )
+
+    Box(contentAlignment = Alignment.Center) {
+        // Pulse ring
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .scale(ringScale)
+                .alpha(ringAlpha)
+                .clip(CircleShape)
+                .background(animColor.copy(alpha = 0.15f))
+        )
+        // Icon circle
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(100.dp)
+                .scale(entryScale)
+                .alpha(entryAlpha)
+                .clip(CircleShape)
+                .background(animColor.copy(alpha = 0.12f))
+        ) {
+            Text(
+                text = icon,
+                fontSize = 44.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// ── Permission button ──
+
+@Composable
+private fun PermissionButton(
+    granted: Boolean,
+    accentColor: Color,
+    optional: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor by animateColorAsState(
+        targetValue = if (granted) WaveGreen.copy(alpha = 0.15f) else accentColor.copy(alpha = 0.15f),
+        animationSpec = tween(400),
+        label = "btnBg"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (granted) WaveGreen.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.3f),
+        animationSpec = tween(400),
+        label = "btnBorder"
+    )
+    val textColor by animateColorAsState(
+        targetValue = if (granted) WaveGreen else AlfredTextPrimary,
+        animationSpec = tween(400),
+        label = "btnText"
+    )
+
+    val label = when {
+        granted -> "✓  Granted"
+        optional -> "Grant Access (Optional)"
+        else -> "Grant Access"
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clip(RoundedCornerShape(50))
+            .background(bgColor)
+            .then(
+                if (!granted) Modifier.clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = onClick
+                ) else Modifier
+            )
+    ) {
+        Text(
+            text = label,
+            fontFamily = PlusJakartaSans,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp,
+            color = textColor
+        )
+    }
+}
+
+// ── Page indicator dots ──
+
+@Composable
+private fun PageDots(total: Int, current: Int, accentColor: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        repeat(total) { i ->
+            val isActive = i == current
+            val dotColor by animateColorAsState(
+                targetValue = if (isActive) accentColor else AlfredSlate,
+                animationSpec = tween(300),
+                label = "dot$i"
+            )
+            val dotWidth by animateDpAsState(
+                targetValue = if (isActive) 24.dp else 8.dp,
+                animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                label = "dotW$i"
+            )
+            Box(
+                modifier = Modifier
+                    .height(8.dp)
+                    .width(dotWidth)
+                    .clip(CircleShape)
+                    .background(dotColor)
+            )
+        }
+    }
+}
