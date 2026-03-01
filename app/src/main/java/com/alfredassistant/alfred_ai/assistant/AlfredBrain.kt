@@ -41,8 +41,16 @@ class AlfredBrain(context: Context) {
     // Callback for when AI wants to show options to the user
     var onConfirmationNeeded: ((ConfirmationRequest) -> Unit)? = null
 
+    // Callback for when a redirecting action was performed (call, open app, etc.)
+    var onRedirectingAction: (() -> Unit)? = null
+
     // Deferred that gets completed when user picks an option
     private var pendingSelection: CompletableDeferred<String>? = null
+
+    // Set to true when a tool call redirects to another app/screen
+    @Volatile
+    var didRedirect: Boolean = false
+        private set
 
     /** Last set of tool names selected for a query (for debug UI) */
     var lastSelectedTools: List<String> = emptyList()
@@ -67,7 +75,21 @@ class AlfredBrain(context: Context) {
         pendingSelection?.complete(selectedOption)
     }
 
+    /** True when the tool loop is waiting for the user to pick an option. */
+    val isAwaitingSelection: Boolean
+        get() = pendingSelection?.isActive == true
+
+    companion object {
+        /** Tool calls that redirect the user to another app/screen */
+        private val REDIRECTING_TOOLS = setOf(
+            "make_call", "dial_number", "launch_app", "open_url", "open_settings",
+            "launch_payment_app", "upi_payment", "open_mail", "open_calendar",
+            "compose_email", "share_via_email", "open_web_search"
+        )
+    }
+
     suspend fun processInput(userSpeech: String): String {
+        didRedirect = false
         // Inject relevant memory context (semantic search based on user query)
         val memoryContext = memoryStore.getRelevantMemoryContext(userSpeech)
         val graphContext = knowledgeGraph.getGraphContext(userSpeech)
@@ -101,6 +123,9 @@ class AlfredBrain(context: Context) {
                 executedNames.add(call.functionName)
                 val res = executeToolCall(call)
                 android.util.Log.d("AlfredBrain", "  ${call.functionName} → ${res.take(100)}")
+                if (call.functionName in REDIRECTING_TOOLS) {
+                    didRedirect = true
+                }
                 Pair(call.id, res)
             }
             result = mistral.sendToolResults(toolResults)
@@ -273,11 +298,13 @@ class AlfredBrain(context: Context) {
                         options.add(optionsArr.getString(i))
                         styles.add(stylesArr?.optString(i, "primary") ?: "primary")
                     }
+                    // Build a shorter spoken version — abbreviate phone numbers
+                    val spokenPrompt = abbreviateForSpeech(prompt)
                     // Show options to user and suspend until they pick one
                     val deferred = CompletableDeferred<String>()
                     pendingSelection = deferred
                     onConfirmationNeeded?.invoke(
-                        ConfirmationRequest(prompt, options, styles)
+                        ConfirmationRequest(prompt, options, styles, spokenPrompt)
                     )
                     val selection = deferred.await()
                     pendingSelection = null
@@ -297,6 +324,23 @@ class AlfredBrain(context: Context) {
 
     fun resetConversation() {
         mistral.clearHistory()
+    }
+
+    /**
+     * Shorten text for TTS — replaces full phone numbers with "ending in XXX"
+     * and trims other verbose details that sound bad when spoken aloud.
+     */
+    private fun abbreviateForSpeech(text: String): String {
+        // Replace phone numbers (7+ digits, with optional +, spaces, dashes) with last 3 digits
+        val phoneRegex = Regex("""[\+]?[\d\s\-\(\)]{7,}""")
+        return phoneRegex.replace(text) { match ->
+            val digits = match.value.filter { it.isDigit() }
+            if (digits.length >= 4) {
+                "ending in ${digits.takeLast(3)}"
+            } else {
+                match.value
+            }
+        }
     }
 
     // ==================== DEBUG DATA ====================

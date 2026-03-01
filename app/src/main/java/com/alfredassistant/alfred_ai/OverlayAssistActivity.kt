@@ -107,7 +107,7 @@ class OverlayAssistActivity : ComponentActivity() {
                     runOnUiThread {
                         currentConfirmation = request
                         assistantState = AssistantState.AWAITING_CONFIRMATION
-                        speechHelper.speak(request.prompt)
+                        speechHelper.speak(request.spokenPrompt)
                     }
                 }
             }
@@ -119,7 +119,9 @@ class OverlayAssistActivity : ComponentActivity() {
                         assistantState = AssistantState.LISTENING
                     },
                     onResult = { text ->
-                        if (assistantState == AssistantState.AWAITING_CONFIRMATION && currentConfirmation != null) {
+                        if (brain.isAwaitingSelection) {
+                            // Route voice input to the pending confirmation
+                            speechHelper.stopGracefully()
                             currentConfirmation = null
                             assistantState = AssistantState.PROCESSING
                             brain.submitOptionSelection(text)
@@ -127,7 +129,12 @@ class OverlayAssistActivity : ComponentActivity() {
                             assistantState = AssistantState.PROCESSING
                             scope.launch {
                                 val response = brain.processInput(text)
-                                speechHelper.speak(response)
+                                if (brain.didRedirect) {
+                                    // Action opened another app — dismiss Alfred
+                                    finish()
+                                } else {
+                                    speechHelper.speak(response)
+                                }
                             }
                         }
                     },
@@ -140,7 +147,9 @@ class OverlayAssistActivity : ComponentActivity() {
                     },
                     onSpeakingDone = {
                         runOnUiThread {
-                            if (assistantState == AssistantState.AWAITING_CONFIRMATION) {
+                            if (brain.isAwaitingSelection) {
+                                // Confirmation was just spoken — listen for user's choice
+                                assistantState = AssistantState.AWAITING_CONFIRMATION
                                 speechHelper.startListening()
                             } else {
                                 assistantState = AssistantState.IDLE
@@ -186,6 +195,7 @@ class OverlayAssistActivity : ComponentActivity() {
                     }
                 },
                 onOptionSelected = { selectedOption ->
+                    speechHelper.stopGracefully()
                     currentConfirmation = null
                     assistantState = AssistantState.PROCESSING
                     brain.submitOptionSelection(selectedOption)
