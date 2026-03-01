@@ -43,6 +43,25 @@
 
 ---
 
+## Phase 5 — UI Overhaul & Polish
+
+### Improve UI
+- [x] **Remove Orb UI** — Deleted AlfredOrb.kt and InterfaceMode enum, wave bar is now the only interface
+- [ ] **Spring physics** — Add spring-based animations (Compose `spring()` specs) to wave bar and UI transitions for more organic, bouncy feel
+- [ ] **Drop Batman aesthetic** — Restyle the interactive interface away from dark/gold butler theme to a modern, clean, friendly design (new color palette, softer tones)
+- [ ] **Dynamic form creation** — AI can generate interactive UI elements on the fly (input fields, toggles, sliders, date pickers) based on context instead of hardcoded confirmation boxes
+- [ ] **Fully dynamic interactive interface** — All user-facing UI (confirmations, options, forms) should be driven by AI tool calls, not static layouts
+
+### Onboarding
+- [ ] **Animated onboarding flow** — Instead of requesting all permissions upfront, show a multi-step onboarding with cool animations introducing each feature (phone, calendar, mic, notifications, etc.)
+- [ ] **Per-feature permission buttons** — Each onboarding step explains the feature with animation and has a "Grant Access" button for that specific permission
+
+### Fixes
+- [ ] **Fix markdown in TTS** — Strip any remaining markdown symbols (**, ##, `, -, *) from AI responses before passing to TTS so they don't get spoken aloud
+- [ ] **Debug logging** — Add tagged logs for user speech input and Alfred's spoken responses (e.g. `Log.d("AlfredSTT", ...)` and `Log.d("AlfredTTS", ...)`) for easier debugging
+
+---
+
 ## Code Structure
 ```
 app/src/main/java/com/alfredassistant/alfred_ai/
@@ -65,9 +84,11 @@ app/src/main/java/com/alfredassistant/alfred_ai/
 ├── speech/
 │   └── SpeechHelper.kt               # STT + TTS
 └── ui/
-    ├── AlfredOrb.kt                   # Animated orb
+    ├── AlfredWaveBar.kt               # Wave animation bar
     ├── AssistantState.kt
+    ├── ConfirmationBox.kt
     ├── OverlayAssistantScreen.kt
+    ├── WaveAssistantScreen.kt
     └── theme/
         ├── Color.kt
         ├── Theme.kt

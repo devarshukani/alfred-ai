@@ -14,7 +14,6 @@ import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
-import com.alfredassistant.alfred_ai.ui.InterfaceMode
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,7 +74,6 @@ class OverlayAssistActivity : ComponentActivity() {
             var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
             var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
             var audioLevel by remember { mutableFloatStateOf(0f) }
-            val interfaceMode = InterfaceMode.WAVE
 
             LaunchedEffect(Unit) {
                 brain.onConfirmationNeeded = { request ->
@@ -149,7 +147,6 @@ class OverlayAssistActivity : ComponentActivity() {
 
             OverlayAssistantScreen(
                 state = assistantState,
-                interfaceMode = interfaceMode,
                 audioLevel = audioLevel,
                 confirmation = currentConfirmation,
                 onMicTap = {
