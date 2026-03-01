@@ -41,6 +41,17 @@ class CoverWaveActivity : ComponentActivity() {
         if (::speechHelper.isInitialized) speechHelper.stopGracefully()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // When returning from a redirected app (e.g. phone call ended),
+        // resume listening on the cover screen
+        if (::speechHelper.isInitialized) {
+            android.os.Handler(mainLooper).postDelayed({
+                speechHelper.startListening()
+            }, 500)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -99,11 +110,9 @@ class CoverWaveActivity : ComponentActivity() {
                                 assistantState = AssistantState.PROCESSING
                                 scope.launch {
                                     val response = brain.processInput(text)
-                                    if (brain.didRedirect) {
-                                        finish()
-                                    } else {
-                                        speechHelper.speak(response)
-                                    }
+                                    // On cover screen: never finish after redirect (e.g. call).
+                                    // Just speak the response and resume listening.
+                                    speechHelper.speak(response)
                                 }
                             }
                         },

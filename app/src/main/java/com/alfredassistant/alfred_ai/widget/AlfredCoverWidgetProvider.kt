@@ -10,7 +10,8 @@ import com.alfredassistant.alfred_ai.R
 
 /**
  * AppWidgetProvider for the Alfred Flex Window cover screen widget.
- * Tapping the widget directly launches Alfred in listening mode on the cover screen.
+ * Auto-launches the full-screen wave activity when the widget is first placed/updated.
+ * Tapping the static widget also launches it.
  */
 class AlfredCoverWidgetProvider : AppWidgetProvider() {
 
@@ -30,8 +31,19 @@ class AlfredCoverWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
-
             appWidgetManager.updateAppWidget(widgetId, views)
+
+            // Auto-launch the wave activity immediately
+            context.startActivity(intent)
         }
+    }
+
+    override fun onEnabled(context: Context) {
+        super.onEnabled(context)
+        // First time widget is placed — launch immediately
+        val intent = Intent(context, CoverWaveActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
     }
 }
