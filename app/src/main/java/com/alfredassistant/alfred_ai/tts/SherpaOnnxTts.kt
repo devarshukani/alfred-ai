@@ -151,6 +151,39 @@ object SherpaOnnxTts {
         }
     }
 
+    /**
+     * Fade out the current TTS audio over [durationMs] then stop.
+     * Call from any thread — the fade runs on a background thread.
+     * Invokes [onFaded] on completion (on the bg thread).
+     */
+    fun stopWithFade(durationMs: Long = 300, onFaded: () -> Unit = {}) {
+        val track = currentTrack
+        if (track == null || stopped) {
+            stopped = true
+            onFaded()
+            return
+        }
+        stopped = true // prevent further chunk writes in speak()
+        Thread {
+            try {
+                val steps = 15
+                val stepDelay = durationMs / steps
+                for (i in steps downTo 0) {
+                    val vol = i.toFloat() / steps
+                    try {
+                        track.setVolume(vol)
+                    } catch (_: IllegalStateException) { break }
+                    Thread.sleep(stepDelay)
+                }
+                try {
+                    track.pause()
+                    track.flush()
+                } catch (_: IllegalStateException) { /* already released */ }
+            } catch (_: Exception) { /* best-effort fade */ }
+            onFaded()
+        }.start()
+    }
+
     fun shutdown() {
         stop()
         tts?.free()

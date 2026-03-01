@@ -26,9 +26,20 @@ class OverlayAssistActivity : ComponentActivity() {
     private val scope = CoroutineScope(Dispatchers.Main)
 
     override fun finish() {
+        if (::speechHelper.isInitialized) {
+            speechHelper.stopGracefully()
+        }
         super.finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // App went off-screen (dismissed, home pressed, task-switched)
+        if (::speechHelper.isInitialized) {
+            speechHelper.stopGracefully()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

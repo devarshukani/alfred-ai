@@ -114,6 +114,16 @@ class SpeechHelper(
         }.start()
     }
 
+    /**
+     * Gracefully stop all speech activity with a smooth audio fade-out.
+     * Use when the UI is dismissed or goes off-screen.
+     */
+    fun stopGracefully() {
+        stopSpeakingSimulation()
+        SherpaOnnxAsr.stopListening()
+        SherpaOnnxTts.stopWithFade(durationMs = 300)
+    }
+
     fun shutdown() {
         stopSpeakingSimulation()
         SherpaOnnxAsr.stopListening()
