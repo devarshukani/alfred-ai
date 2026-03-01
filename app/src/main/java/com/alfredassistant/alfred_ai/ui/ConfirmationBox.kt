@@ -12,13 +12,16 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alfredassistant.alfred_ai.ui.theme.*
+
+private val CardBg = Color(0xFF1C1D28)
+private val CardBorder = Color.White.copy(alpha = 0.08f)
+private val PillShape = RoundedCornerShape(50)
 
 @Composable
 fun ConfirmationBox(
@@ -34,44 +37,34 @@ fun ConfirmationBox(
     ) {
         confirmation?.let { req ->
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 20.dp)
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                AlfredCharcoal.copy(alpha = 0.95f),
-                                AlfredDarkGray.copy(alpha = 0.95f)
-                            )
-                        )
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = AlfredGold.copy(alpha = 0.3f),
-                        shape = RoundedCornerShape(20.dp)
-                    )
+                    .background(CardBg)
+                    .border(0.5.dp, CardBorder, RoundedCornerShape(20.dp))
                     .padding(20.dp)
             ) {
-                // Prompt text
                 Text(
                     text = req.prompt,
                     color = AlfredTextPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    textAlign = TextAlign.Start,
+                    lineHeight = 22.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
                 )
 
-                // Option buttons
                 req.options.forEachIndexed { index, option ->
-                    OptionChip(
-                        label = option,
-                        index = index,
-                        onClick = { onOptionSelected(option) }
-                    )
+                    val style = req.buttonStyles.getOrElse(index) { "primary" }
+                    when (style) {
+                        "primary" -> PrimaryPill(option) { onOptionSelected(option) }
+                        "secondary" -> SecondaryPill(option) { onOptionSelected(option) }
+                        "cancel" -> CancelText(option) { onOptionSelected(option) }
+                        else -> PrimaryPill(option) { onOptionSelected(option) }
+                    }
                     if (index < req.options.lastIndex) {
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -82,29 +75,61 @@ fun ConfirmationBox(
 }
 
 @Composable
-private fun OptionChip(
-    label: String,
-    index: Int,
-    onClick: () -> Unit
-) {
+private fun PrimaryPill(label: String, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(AlfredSlate.copy(alpha = 0.7f))
-            .border(
-                width = 1.dp,
-                color = AlfredGold.copy(alpha = 0.2f),
-                shape = RoundedCornerShape(12.dp)
-            )
+            .clip(PillShape)
+            .background(Color.White.copy(alpha = 0.14f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.20f), PillShape)
             .clickable { onClick() }
-            .padding(vertical = 12.dp, horizontal = 16.dp)
+            .padding(vertical = 13.dp, horizontal = 20.dp)
     ) {
         Text(
             text = label,
-            color = AlfredGoldLight,
+            color = AlfredTextPrimary,
             fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun SecondaryPill(label: String, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(PillShape)
+            .background(Color.White.copy(alpha = 0.06f))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp, horizontal = 20.dp)
+    ) {
+        Text(
+            text = label,
+            color = AlfredTextSecondary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun CancelText(label: String, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 13.dp, horizontal = 20.dp)
+    ) {
+        Text(
+            text = label,
+            color = AlfredTextDim,
+            fontSize = 13.sp,
             fontWeight = FontWeight.Normal,
             textAlign = TextAlign.Center
         )

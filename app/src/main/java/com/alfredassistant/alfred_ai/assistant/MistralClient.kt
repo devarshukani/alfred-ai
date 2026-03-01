@@ -988,7 +988,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
             put("type", "function")
             put("function", JSONObject().apply {
                 put("name", "present_options")
-                put("description", "Present clickable options to the user when a choice or confirmation is needed BEFORE executing an action. MUST be used before: making phone calls, creating calendar events, composing emails, initiating payments, and when multiple contacts match. Max 4 options. Always include a Cancel option. The user will tap or speak their choice.")
+                put("description", "Present clickable options to the user when a choice or confirmation is needed BEFORE executing an action. MUST be used before: making phone calls, creating calendar events, composing emails, initiating payments, and when multiple contacts match. Max 4 options. Always include a Cancel option last. Use button_styles to control how each button looks.")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {
@@ -1002,8 +1002,16 @@ Today's date is provided in the conversation — use it to calculate correct dat
                             put("description", "List of option labels (max 4). Keep them short and clear.")
                             put("maxItems", 4)
                         })
+                        put("button_styles", JSONObject().apply {
+                            put("type", "array")
+                            put("items", JSONObject().apply {
+                                put("type", "string")
+                                put("enum", JSONArray().apply { put("primary"); put("secondary"); put("cancel") })
+                            })
+                            put("description", "Style for each option button. 'primary' = highlighted action (e.g. call/confirm), 'secondary' = alternative action (e.g. change time), 'cancel' = dismiss/cancel (plain text, no background). Must match the length of options. Multiple primary and secondary allowed, but only one cancel.")
+                        })
                     })
-                    put("required", JSONArray().apply { put("prompt"); put("options") })
+                    put("required", JSONArray().apply { put("prompt"); put("options"); put("button_styles") })
                 })
             })
         })

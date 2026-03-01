@@ -176,7 +176,7 @@ fun AlfredWaveBar(
         AssistantState.LISTENING -> C5(WaveBlue, WaveCyan, WaveGreen, WaveYellow, WaveBlue)
         AssistantState.PROCESSING -> C5(WavePurple, WaveBlue, WavePink, WaveCyan, WavePurple)
         AssistantState.SPEAKING -> C5(WaveOrange, WaveYellow, WaveRed, WavePink, WaveOrange)
-        AssistantState.AWAITING_CONFIRMATION -> C5(AlfredGold, AlfredAmber, AlfredGoldLight, WaveYellow, AlfredGold)
+        AssistantState.AWAITING_CONFIRMATION -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
     }
     val c1 by animateColorAsState(tc.a, ctw, label = "c1")
     val c2 by animateColorAsState(tc.b, ctw, label = "c2")
