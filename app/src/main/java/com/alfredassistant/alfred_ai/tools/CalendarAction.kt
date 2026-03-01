@@ -200,9 +200,17 @@ class CalendarAction(private val context: Context) {
                 args.optString("description", null), args.optString("location", null), args.optBoolean("all_day", false))
             "Event '$title' created."
         },
-        ToolDef(name = "get_today_events", description = "Get all calendar events for today.") { _ -> getTodayEvents() },
-        ToolDef(name = "get_tomorrow_events", description = "Get all calendar events for tomorrow.") { _ -> getTomorrowEvents() },
-        ToolDef(name = "get_week_events", description = "Get all calendar events for the rest of this week.") { _ -> getWeekEvents() },
+        ToolDef(
+            name = "get_events",
+            description = "Get calendar events within a time range. Use for any date query: today, tomorrow, next week, specific dates, etc. The LLM should compute the correct start/end datetimes.",
+            parameters = listOf(
+                Param(name = "start_datetime", type = "string", description = "Range start in YYYY-MM-DD HH:mm"),
+                Param(name = "end_datetime", type = "string", description = "Range end in YYYY-MM-DD HH:mm")
+            ),
+            required = listOf("start_datetime", "end_datetime")
+        ) { args ->
+            getEvents(parseDateTime(args.getString("start_datetime")), parseDateTime(args.getString("end_datetime")))
+        },
         ToolDef(name = "open_calendar", description = "Open the calendar app.") { _ -> openCalendar(); "Calendar opened." }
     )
 }
