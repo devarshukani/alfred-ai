@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.notifications
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.content.Intent
@@ -7,6 +7,8 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.json.JSONArray
 import org.json.JSONObject
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -150,4 +152,24 @@ class NotificationAction(private val context: Context) {
             packageName.substringAfterLast(".")
         }
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(name = "get_notifications", description = "Get recent notifications from the device. Returns app name, title, text, and time.",
+            parameters = listOf(Param(name = "count", type = "integer", description = "Number of notifications. Default 10."))
+        ) { args ->
+            if (!isListenerEnabled()) { openListenerSettings(); "Notification access is required. I've opened the settings — please enable Alfred." }
+            else getRecentNotifications(args.optInt("count", 10))
+        },
+        ToolDef(name = "get_app_notifications", description = "Get notifications from a specific app (e.g. WhatsApp, Gmail).",
+            parameters = listOf(
+                Param(name = "app_name", type = "string", description = "App name to filter by"),
+                Param(name = "count", type = "integer", description = "Number of notifications. Default 10.")
+            ),
+            required = listOf("app_name")
+        ) { args ->
+            if (!isListenerEnabled()) { openListenerSettings(); "Notification access is required. I've opened the settings — please enable Alfred." }
+            else getNotificationsFromApp(args.getString("app_name"), args.optInt("count", 10))
+        },
+        ToolDef(name = "clear_notifications", description = "Clear all stored notification history.") { _ -> clearNotifications() }
+    )
 }

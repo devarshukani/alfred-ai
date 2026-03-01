@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.weather
+package com.alfredassistant.alfred_ai.tools
 
 import android.Manifest
 import android.content.Context
@@ -11,6 +11,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import java.util.concurrent.TimeUnit
 
 /**
@@ -213,4 +215,14 @@ class WeatherAction(private val context: Context) {
         96, 99 -> "Thunderstorm with hail"
         else -> "Unknown"
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(name = "get_weather", description = "Get current weather and 3-day forecast for a location.",
+            parameters = listOf(Param(name = "location", type = "string", description = "City name (e.g. 'London', 'Mumbai')")),
+            required = listOf("location")
+        ) { args -> getWeather(args.getString("location")) },
+        ToolDef(name = "get_weather_here",
+            description = "Get weather for the user's current GPS location. Use when user says 'weather here' or doesn't specify a city."
+        ) { _ -> getWeatherHere() }
+    )
 }

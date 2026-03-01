@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.memory
+package com.alfredassistant.alfred_ai.tools
 
 import android.util.Log
 import com.alfredassistant.alfred_ai.db.KnowledgeEdge

@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alfredassistant.alfred_ai.skills.SelectedSkillInfo
 import com.alfredassistant.alfred_ai.ui.theme.*
 
 /** Which tab is active in the debug inspector */
@@ -36,6 +37,7 @@ fun DebugInspectorScreen(
     graphEdges: List<Triple<String, String, String>>,
     selectedTools: List<String>,
     executedTools: List<String>,
+    selectedSkills: List<SelectedSkillInfo>,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -105,7 +107,7 @@ fun DebugInspectorScreen(
             when (activeTab) {
                 DebugTab.MEMORY -> MemoryTab(memories)
                 DebugTab.GRAPH -> GraphTab(graphNodes, graphEdges)
-                DebugTab.TOOLS -> ToolsTab(selectedTools, executedTools)
+                DebugTab.TOOLS -> ToolsTab(selectedSkills, selectedTools, executedTools)
             }
         }
     }
@@ -283,11 +285,36 @@ private fun GraphTab(
 // ==================== TOOLS TAB ====================
 
 @Composable
-private fun ToolsTab(selectedTools: List<String>, executedTools: List<String>) {
+private fun ToolsTab(selectedSkills: List<SelectedSkillInfo>, selectedTools: List<String>, executedTools: List<String>) {
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        // Active skills section
+        item {
+            SectionHeader(
+                if (selectedSkills.isEmpty()) "Active Skills (none yet)"
+                else "Active Skills (${selectedSkills.size})",
+                WaveCyan
+            )
+        }
+        if (selectedSkills.isEmpty()) {
+            item {
+                Text(
+                    text = "Send a message to see which skills get activated",
+                    color = AlfredTextDim,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                )
+            }
+        } else {
+            items(selectedSkills) { skill ->
+                SkillRow(skill)
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(8.dp)) }
+
         // Executed tools
         item {
             SectionHeader(
@@ -326,6 +353,50 @@ private fun ToolsTab(selectedTools: List<String>, executedTools: List<String>) {
                 ToolRow(name, if (wasExecuted) WaveGreen else WavePurple, executed = wasExecuted)
             }
         }
+    }
+}
+
+@Composable
+private fun SkillRow(skill: SelectedSkillInfo) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(WaveCyan.copy(alpha = 0.08f))
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = if (skill.alwaysInclude) "📌" else "🎯",
+            fontSize = 12.sp,
+            modifier = Modifier.padding(end = 8.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = skill.name,
+                color = WaveCyan,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = "${skill.toolCount} tools",
+                color = AlfredTextDim,
+                fontSize = 10.sp
+            )
+        }
+        Text(
+            text = if (skill.alwaysInclude) "always" else String.format("%.2f", skill.score),
+            color = if (skill.alwaysInclude) WaveGreen else WaveYellow,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (skill.alwaysInclude) WaveGreen.copy(alpha = 0.1f)
+                    else WaveYellow.copy(alpha = 0.1f)
+                )
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        )
     }
 }
 

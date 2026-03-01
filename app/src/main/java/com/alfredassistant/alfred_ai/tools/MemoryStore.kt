@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.memory
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.util.Log
@@ -6,6 +6,8 @@ import com.alfredassistant.alfred_ai.db.MemoryEntity
 import com.alfredassistant.alfred_ai.db.MemoryEntity_
 import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.embedding.EmbeddingModel
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import io.objectbox.Box
 import io.objectbox.query.QueryBuilder.StringOrder
 import org.json.JSONArray
@@ -266,6 +268,72 @@ class MemoryStore(
             "$prefix ${entry.key}" to entry.value
         }
     }
+
+    // ==================== TOOL DEFS ====================
+
+    private val entityParam = Param(
+        name = "entities", type = "array", description = "Extracted entities from the fact",
+        items = Param(name = "entity", type = "object", description = "An entity",
+            properties = listOf(
+                Param(name = "name", type = "string", description = "Short lowercase entity name (e.g. 'john', 'office', '10:30 am')"),
+                Param(name = "type", type = "string", description = "Entity type: person, place, time, thing, concept, event, preference"),
+                Param(name = "attributes", type = "object", description = "Optional key-value attributes",
+                    additionalProperties = Param(name = "value", type = "string", description = "Attribute value"))
+            ), required = listOf("name", "type"))
+    )
+
+    private val relationParam = Param(
+        name = "relations", type = "array", description = "Relationships between entities",
+        items = Param(name = "relation", type = "object", description = "A relation",
+            properties = listOf(
+                Param(name = "source", type = "string", description = "Source entity name"),
+                Param(name = "relation", type = "string", description = "Relationship verb (e.g. 'has_name', 'lives_in', 'works_at', 'likes')"),
+                Param(name = "target", type = "string", description = "Target entity name")
+            ), required = listOf("source", "relation", "target"))
+    )
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "create_memory",
+            description = """Store something the user wants you to remember. You MUST extract entities and relations from the fact yourself.
+IMPORTANT: Be aggressive about storing memories. If the user mentions ANY personal detail, preference, or fact — store it immediately.
+Each entity needs a short name and a type (person, place, time, thing, concept, event, preference).
+Each relation links two entity names with a relationship verb.
+Always include a "user" entity of type "person" and link it to the subject.
+Keep entity names short and lowercase. Use specific relation verbs.""",
+            parameters = listOf(
+                Param(name = "content", type = "string", description = "The full natural language fact or preference to store"),
+                Param(name = "type", type = "string", description = "Memory type: 'fact' or 'preference'. Default: fact", enum = listOf("fact", "preference")),
+                entityParam, relationParam
+            ),
+            required = listOf("content", "entities", "relations")
+        ) { args -> createMemory(args.getString("content"), args.optString("type", "fact"), args.optJSONArray("entities"), args.optJSONArray("relations")) },
+
+        ToolDef(
+            name = "get_memory",
+            description = "Search stored memories and knowledge graph by natural language query. Returns relevant facts, preferences, and entity relationships. ALWAYS check memory before asking the user for info you might already have.",
+            parameters = listOf(Param(name = "query", type = "string", description = "Natural language search query (e.g. 'my pets', 'where does John live', 'my preferences')")),
+            required = listOf("query")
+        ) { args -> getMemory(args.getString("query")) },
+
+        ToolDef(
+            name = "update_memory",
+            description = "Update an existing memory. Provide the old content to find it, new content to replace, and new entities/relations to rebuild the graph.",
+            parameters = listOf(
+                Param(name = "old_content", type = "string", description = "The existing memory to find (semantic match)"),
+                Param(name = "new_content", type = "string", description = "The updated memory content"),
+                entityParam, relationParam
+            ),
+            required = listOf("old_content", "new_content", "entities", "relations")
+        ) { args -> updateMemory(args.getString("old_content"), args.getString("new_content"), args.optJSONArray("entities"), args.optJSONArray("relations")) },
+
+        ToolDef(
+            name = "delete_memory",
+            description = "Delete a stored memory. Finds the closest matching memory and removes it. Pass content='all' to delete ALL memories and clear the entire knowledge graph.",
+            parameters = listOf(Param(name = "content", type = "string", description = "The memory to delete (semantic match, doesn't need to be exact)")),
+            required = listOf("content")
+        ) { args -> deleteMemory(args.getString("content")) }
+    )
 
     // ==================== MIGRATION ====================
 

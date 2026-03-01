@@ -50,7 +50,7 @@
 
         <!-- Notification Listener Service -->
         <service
-            android:name=".features.notifications.AlfredNotificationListener"
+            android:name=".tools.AlfredNotificationListener"
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
