@@ -37,7 +37,7 @@ object RichCardParser {
             "button_secondary" -> RichBlock.ButtonSecondary(obj.getString("label"), obj.getString("action_id"))
             "button_cancel" -> RichBlock.ButtonCancel(obj.getString("label"), obj.optString("action_id", "dismiss"))
             "toggle" -> RichBlock.Toggle(obj.getString("label"), obj.getString("key"), obj.optBoolean("default_on", false))
-            "text_field" -> RichBlock.TextField(obj.getString("placeholder"), obj.getString("key"))
+            "text_field" -> RichBlock.TextField(obj.getString("placeholder"), obj.getString("key"), obj.optString("default_value", ""))
             "chip_row" -> {
                 val arr = obj.getJSONArray("chips")
                 val chips = (0 until arr.length()).map { arr.getString(it) }

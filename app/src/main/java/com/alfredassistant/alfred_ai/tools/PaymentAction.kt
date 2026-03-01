@@ -5,11 +5,24 @@ import android.content.Intent
 import android.net.Uri
 import com.alfredassistant.alfred_ai.skills.Param
 import com.alfredassistant.alfred_ai.skills.ToolDef
+import com.alfredassistant.alfred_ai.ui.RichBlock
+import com.alfredassistant.alfred_ai.ui.RichCard
+import kotlinx.coroutines.CompletableDeferred
 
-/**
- * Launch payment and financial apps via intents.
- */
 class PaymentAction(private val context: Context) {
+
+    /** Callback to show a card on screen — wired by the skill. */
+    var onDisplayCard: ((RichCard) -> Unit)? = null
+
+    /** Deferred that resolves when user taps a card button. */
+    var pendingAction: CompletableDeferred<String>? = null
+
+    val isAwaitingAction: Boolean
+        get() = pendingAction?.isActive == true
+
+    fun submitAction(actionId: String) {
+        pendingAction?.complete(actionId)
+    }
 
     private val paymentApps = mapOf(
         "gpay" to "com.google.android.apps.nbu.paisa.user",
@@ -24,9 +37,6 @@ class PaymentAction(private val context: Context) {
         "whatsapp pay" to "com.whatsapp"
     )
 
-    /**
-     * Launch a payment app by name.
-     */
     fun launchPaymentApp(appName: String): String {
         val packageName = paymentApps[appName.lowercase()]
             ?: paymentApps.entries.firstOrNull { appName.lowercase().contains(it.key) }?.value
@@ -40,22 +50,59 @@ class PaymentAction(private val context: Context) {
             }
             return "$appName is not installed on this device."
         }
-
-        // Try as a generic app search
-        val intent = context.packageManager.getLaunchIntentForPackage(appName)
-        if (intent != null) {
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            context.startActivity(intent)
-            return "App launched."
-        }
-
         return "Could not find payment app: $appName. Available: ${paymentApps.keys.joinToString(", ")}."
     }
 
     /**
-     * Open UPI payment link (for direct payments).
+     * Show a confirmation card with an editable UPI ID, wait for user to confirm,
+     * then initiate the payment with the (possibly edited) UPI ID.
      */
-    fun openUpiPayment(upiId: String, name: String?, amount: String?): String {
+    suspend fun openUpiPaymentWithConfirmation(upiId: String, name: String?, amount: String?): String {
+        val displayCallback = onDisplayCard ?: return openUpiPaymentDirect(upiId, name, amount)
+
+        // Build confirmation card with editable UPI ID
+        val blocks = mutableListOf<RichBlock>(
+            RichBlock.Title("Confirm UPI Payment"),
+            RichBlock.Spacer(8)
+        )
+        if (!name.isNullOrBlank()) blocks.add(RichBlock.InfoRow("To", name))
+        if (!amount.isNullOrBlank()) blocks.add(RichBlock.InfoRow("Amount", "₹$amount"))
+        blocks.add(RichBlock.Spacer(8))
+        blocks.add(RichBlock.Caption("Verify or edit the UPI ID below:"))
+        blocks.add(RichBlock.TextField(placeholder = "UPI ID", key = "upi_id", defaultValue = upiId))
+        blocks.add(RichBlock.Spacer(12))
+        blocks.add(RichBlock.ButtonPrimary(label = "Pay", actionId = "confirm_upi"))
+        blocks.add(RichBlock.ButtonCancel(label = "Cancel"))
+
+        val card = RichCard(
+            blocks = blocks,
+            spokenSummary = "Please confirm the UPI ID before I send the payment."
+        )
+
+        val deferred = CompletableDeferred<String>()
+        pendingAction = deferred
+        displayCallback(card)
+        val action = deferred.await()
+        pendingAction = null
+
+        if (action.startsWith("dismiss") || action.startsWith("cancel")) {
+            return "Payment cancelled."
+        }
+
+        // Parse the edited UPI ID from the action string
+        // Format: "confirm_upi?upi_id=edited_value"
+        val finalUpiId = if (action.contains("?")) {
+            val params = action.substringAfter("?")
+            params.split("&").firstOrNull { it.startsWith("upi_id=") }
+                ?.substringAfter("upi_id=")
+                ?.takeIf { it.isNotBlank() }
+                ?: upiId
+        } else upiId
+
+        return openUpiPaymentDirect(finalUpiId, name, amount)
+    }
+
+    private fun openUpiPaymentDirect(upiId: String, name: String?, amount: String?): String {
         val uriBuilder = StringBuilder("upi://pay?pa=$upiId")
         if (!name.isNullOrBlank()) uriBuilder.append("&pn=${Uri.encode(name)}")
         if (!amount.isNullOrBlank()) uriBuilder.append("&am=$amount")
@@ -73,14 +120,10 @@ class PaymentAction(private val context: Context) {
         }
     }
 
-    /**
-     * List available payment apps on the device.
-     */
     fun listAvailablePaymentApps(): String {
         val available = paymentApps.filter { (_, pkg) ->
             context.packageManager.getLaunchIntentForPackage(pkg) != null
         }.keys.toList()
-
         return if (available.isEmpty()) "No known payment apps found on this device."
         else "Available payment apps: ${available.joinToString(", ")}."
     }
@@ -94,14 +137,14 @@ class PaymentAction(private val context: Context) {
         ) { args -> launchPaymentApp(args.getString("app_name")) },
         ToolDef(
             name = "upi_payment",
-            description = "Initiate a UPI payment. Use phone number as UPI ID in format '91XXXXXXXXXX@upi'. Opens a UPI app to complete.",
+            description = "Initiate a UPI payment. Shows a confirmation card with an editable UPI ID field so the user can verify/correct it before paying. Opens a UPI app to complete.",
             parameters = listOf(
                 Param(name = "upi_id", type = "string", description = "Recipient's UPI ID. Use '91XXXXXXXXXX@upi' format."),
                 Param(name = "name", type = "string", description = "Recipient name (optional)"),
                 Param(name = "amount", type = "string", description = "Amount to pay (optional)")
             ),
             required = listOf("upi_id")
-        ) { args -> openUpiPayment(args.getString("upi_id"), args.optString("name", null), args.optString("amount", null)) },
+        ) { args -> openUpiPaymentWithConfirmation(args.getString("upi_id"), args.optString("name", null), args.optString("amount", null)) },
         ToolDef(name = "list_payment_apps", description = "List payment apps installed on the device.") { _ -> listAvailablePaymentApps() }
     )
 }
