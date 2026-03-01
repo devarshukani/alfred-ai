@@ -673,6 +673,64 @@ private fun LineChartBlock(
 }
 
 
+/** Map team code to a pair of (background, text) colors for the rectangle flag */
+private fun teamFlagColors(code: String): Pair<Color, Color> {
+    return when (code.uppercase()) {
+        "IND" -> Color(0xFF138808) to Color.White          // India green
+        "AUS" -> Color(0xFFFFCD00) to Color(0xFF003F87)    // Australia gold
+        "ENG" -> Color(0xFF003F87) to Color.White          // England blue
+        "WI"  -> Color(0xFF7B0041) to Color(0xFFFFD700)    // West Indies maroon
+        "PAK" -> Color(0xFF01411C) to Color.White          // Pakistan green
+        "SA"  -> Color(0xFF007749) to Color(0xFFFFB81C)    // South Africa green
+        "NZ"  -> Color(0xFF000000) to Color.White          // New Zealand black
+        "SL"  -> Color(0xFF0F1A5F) to Color(0xFFFFB700)    // Sri Lanka blue
+        "BAN" -> Color(0xFF006A4E) to Color(0xFFF42A41)    // Bangladesh green
+        "AFG" -> Color(0xFF000000) to Color(0xFFD32011)    // Afghanistan
+        // Football clubs
+        "MCI" -> Color(0xFF6CABDD) to Color.White
+        "ARS" -> Color(0xFFEF0107) to Color.White
+        "LIV" -> Color(0xFFC8102E) to Color.White
+        "BAR" -> Color(0xFFA50044) to Color(0xFF004D98)
+        "RMA" -> Color.White to Color(0xFF00529F)
+        "CHE" -> Color(0xFF034694) to Color.White
+        "MUN" -> Color(0xFFDA291C) to Color(0xFFFBE122)
+        // IPL teams
+        "CSK" -> Color(0xFFFDB913) to Color(0xFF0081E9)
+        "MI"  -> Color(0xFF004BA0) to Color(0xFFD1AB3E)
+        "RCB" -> Color(0xFFEC1C24) to Color(0xFF2B2A29)
+        "KKR" -> Color(0xFF3A225D) to Color(0xFFF2C230)
+        "DC"  -> Color(0xFF004C93) to Color(0xFFEF1B23)
+        "SRH" -> Color(0xFFFF822A) to Color(0xFF000000)
+        "RR"  -> Color(0xFFE73895) to Color(0xFF254AA5)
+        "GT"  -> Color(0xFF1C1C1C) to Color(0xFF0B4EA2)
+        "PBKS", "PK" -> Color(0xFFED1B24) to Color.White
+        "LSG" -> Color(0xFF0057E2) to Color(0xFFA7E6FF)
+        else  -> Color(0xFF3A3A4A) to AlfredTextPrimary    // default dark
+    }
+}
+
+@Composable
+private fun TeamFlagRect(code: String) {
+    val (bg, fg) = teamFlagColors(code)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .width(52.dp)
+            .height(34.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(bg)
+            .border(0.5.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+    ) {
+        Text(
+            text = code.uppercase(),
+            color = fg,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.5.sp
+        )
+    }
+}
+
 @Composable
 private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
     val isLive = card.status.contains("LIVE", ignoreCase = true)
@@ -683,10 +741,6 @@ private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)
-            .clip(InnerCardShape)
-            .background(Color.White.copy(alpha = 0.05f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.08f), InnerCardShape)
-            .padding(vertical = 16.dp, horizontal = 12.dp)
     ) {
         // Detail line (tournament / match info)
         if (card.detail.isNotBlank()) {
@@ -718,24 +772,21 @@ private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
                     letterSpacing = 1.sp
                 )
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
         }
 
-        // Versus row: Home — Score VS Score — Away
+        // Versus row
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly,
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Home team side
+            // Home team
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
             ) {
-                if (card.homeIcon.isNotBlank()) {
-                    Text(text = card.homeIcon, fontSize = 32.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
+                TeamFlagRect(card.homeIcon.ifBlank { card.homeTeam.take(3) })
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = card.homeTeam,
                     color = AlfredTextPrimary,
@@ -745,53 +796,41 @@ private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-
-            // Scores in center
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = card.homeScore,
+                    color = AlfredTextPrimary,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                if (card.homeExtra.isNotBlank()) {
                     Text(
-                        text = card.homeScore,
-                        color = AlfredTextPrimary,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = " — ",
-                        color = AlfredTextDim,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Normal
-                    )
-                    Text(
-                        text = card.awayScore,
-                        color = AlfredTextPrimary,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
+                        text = card.homeExtra,
+                        color = AlfredTextSecondary,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 2.dp)
                     )
                 }
-                // "VS" label below scores
-                Text(
-                    text = "VS",
-                    color = AlfredGold,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
             }
 
-            // Away team side
+            // VS
+            Text(
+                text = "VS",
+                color = AlfredGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                modifier = Modifier.padding(horizontal = 6.dp)
+            )
+
+            // Away team
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.weight(1f)
             ) {
-                if (card.awayIcon.isNotBlank()) {
-                    Text(text = card.awayIcon, fontSize = 32.sp)
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
+                TeamFlagRect(card.awayIcon.ifBlank { card.awayTeam.take(3) })
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = card.awayTeam,
                     color = AlfredTextPrimary,
@@ -801,31 +840,22 @@ private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-            }
-        }
-
-        // Extra info rows (e.g. overs, innings detail)
-        if (card.homeExtra.isNotBlank() || card.awayExtra.isNotBlank()) {
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                modifier = Modifier.fillMaxWidth()
-            ) {
                 Text(
-                    text = card.homeExtra,
-                    color = AlfredTextSecondary,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
+                    text = card.awayScore,
+                    color = AlfredTextPrimary,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Text(
-                    text = card.awayExtra,
-                    color = AlfredTextSecondary,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f)
-                )
+                if (card.awayExtra.isNotBlank()) {
+                    Text(
+                        text = card.awayExtra,
+                        color = AlfredTextSecondary,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
             }
         }
     }
