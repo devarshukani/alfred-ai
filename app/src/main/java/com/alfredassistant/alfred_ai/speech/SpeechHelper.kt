@@ -1,10 +1,15 @@
 package com.alfredassistant.alfred_ai.speech
 
 import android.content.Context
+import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import com.alfredassistant.alfred_ai.asr.SherpaOnnxAsr
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import com.alfredassistant.alfred_ai.tts.SherpaOnnxTts
+import java.util.Locale
 
 class SpeechHelper(
     private val context: Context,
@@ -15,48 +20,59 @@ class SpeechHelper(
     private val onError: (String) -> Unit,
     private val onAudioLevel: (Float) -> Unit = {}
 ) {
+    private var speechRecognizer: SpeechRecognizer? = null
     private val handler = Handler(Looper.getMainLooper())
-    private val mainHandler = Handler(Looper.getMainLooper())
     private var isSpeaking = false
     private var speakingSimRunnable: Runnable? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun init() {
-        // Initialise sherpa-onnx ASR (model loaded once, reused across calls)
-        SherpaOnnxAsr.create(context)
-        // Initialise sherpa-onnx TTS singleton (model loaded once, reused across calls)
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) { onListeningStarted() }
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {
+                val normalized = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+                onAudioLevel(normalized)
+            }
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { onAudioLevel(0f) }
+            override fun onError(error: Int) {
+                onAudioLevel(0f)
+                val msg = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that. Try again."
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected."
+                    else -> "Speech error ($error)"
+                }
+                onError(msg)
+            }
+            override fun onResults(results: Bundle?) {
+                onAudioLevel(0f)
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val text = matches?.firstOrNull() ?: ""
+                if (text.isNotEmpty()) onResult(text)
+                else onError("Didn't catch that.")
+            }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+
         SherpaOnnxTts.createTts(context)
     }
 
     fun startListening() {
-        SherpaOnnxAsr.startListening(
-            onReady = {
-                mainHandler.post { onListeningStarted() }
-            },
-            onPartial = { /* partial results ignored — we wait for final */ },
-            onFinal = { text ->
-                // Stop mic immediately so we don't transcribe TTS output
-                SherpaOnnxAsr.stopListening()
-                mainHandler.post { onResult(text) }
-            },
-            onError = { msg ->
-                mainHandler.post { onError(msg) }
-            },
-            // Called from audio thread — write directly, Compose state is thread-safe
-            onAudioLevel = { level ->
-                onAudioLevel(level)
-            },
-        )
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        speechRecognizer?.startListening(intent)
     }
 
     fun stopListening() {
-        SherpaOnnxAsr.stopListening()
+        speechRecognizer?.stopListening()
     }
 
-    /**
-     * Simulate audio level during TTS playback using a varying pattern.
-     * TTS doesn't expose real audio levels, so we generate a natural-feeling
-     * rhythm that mimics speech cadence.
-     */
     private fun startSpeakingSimulation() {
         isSpeaking = true
         var tick = 0L
@@ -64,7 +80,6 @@ class SpeechHelper(
             override fun run() {
                 if (!isSpeaking) return
                 tick++
-                // Combine multiple sine waves for natural speech-like rhythm
                 val t = tick * 0.08
                 val level = (0.4 +
                     0.25 * kotlin.math.sin(t * 2.3) +
@@ -72,7 +87,7 @@ class SpeechHelper(
                     0.10 * kotlin.math.sin(t * 1.1)
                 ).toFloat().coerceIn(0.1f, 0.95f)
                 onAudioLevel(level)
-                handler.postDelayed(this, 50) // ~20fps
+                handler.postDelayed(this, 50)
             }
         }
         handler.post(speakingSimRunnable!!)
@@ -86,8 +101,8 @@ class SpeechHelper(
     }
 
     fun speak(text: String) {
-        // Stop ASR so we don't transcribe our own TTS output
-        SherpaOnnxAsr.stopListening()
+        // Stop recognizer so we don't pick up our own TTS
+        speechRecognizer?.stopListening()
 
         if (SherpaOnnxTts.tts == null) {
             onError("TTS not ready")
@@ -120,13 +135,13 @@ class SpeechHelper(
      */
     fun stopGracefully() {
         stopSpeakingSimulation()
-        SherpaOnnxAsr.stopListening()
+        speechRecognizer?.stopListening()
         SherpaOnnxTts.stopWithFade(durationMs = 300)
     }
 
     fun shutdown() {
         stopSpeakingSimulation()
-        SherpaOnnxAsr.stopListening()
-        // Don't shutdown singletons — they live for the app's lifetime
+        speechRecognizer?.destroy()
+        // Don't shutdown the TTS singleton — it lives for the app's lifetime
     }
 }
