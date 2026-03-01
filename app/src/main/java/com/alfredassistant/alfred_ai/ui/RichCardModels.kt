@@ -71,6 +71,30 @@ sealed class RichBlock {
 
     /** Star rating display */
     data class Rating(val stars: Float, val label: String = "") : RichBlock()
+
+    /** Sports score card — versus-style layout */
+    data class ScoreCard(
+        val homeTeam: String,
+        val awayTeam: String,
+        val homeScore: String,
+        val awayScore: String,
+        val homeIcon: String = "",    // emoji (e.g. 🇮🇳, ⚽)
+        val awayIcon: String = "",
+        val status: String = "",      // "LIVE", "FT", "2nd Innings", "Half-Time"
+        val sport: String = "",       // "cricket", "football", "basketball"
+        val detail: String = "",      // "IPL 2026 • Match 12"
+        val homeExtra: String = "",   // "142/3 (18.2 ov)"
+        val awayExtra: String = ""    // "138/10 (19.4 ov)"
+    ) : RichBlock()
+
+    /** Line chart for price/time series data */
+    data class LineChart(
+        val points: List<Float>,
+        val label: String = "",
+        val minLabel: String = "",
+        val maxLabel: String = "",
+        val color: String = "green" // "green", "red", "blue", "gold"
+    ) : RichBlock()
 }
 
 /** A single item inside a Carousel */
