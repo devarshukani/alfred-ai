@@ -11,6 +11,21 @@ android {
     namespace = "com.alfredassistant.alfred_ai"
     compileSdk = 35
 
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties()
+    if (keystorePropsFile.exists()) {
+        FileInputStream(keystorePropsFile).use { keystoreProps.load(it) }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(rootProject.file(keystoreProps.getProperty("storeFile", "")))
+            storePassword = keystoreProps.getProperty("storePassword", "")
+            keyAlias = keystoreProps.getProperty("keyAlias", "")
+            keyPassword = keystoreProps.getProperty("keyPassword", "")
+        }
+    }
+
     defaultConfig {
         applicationId = "com.alfredassistant.alfred_ai"
         minSdk = 28
@@ -32,6 +47,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
