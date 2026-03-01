@@ -92,16 +92,22 @@ class AlfredBrain(context: Context) {
 
         var result = mistral.chat(userSpeech, relevantTools)
 
-        var maxIterations = 12
+        var maxIterations = 5
         while (result.toolCalls.isNotEmpty() && maxIterations > 0) {
             maxIterations--
+            val callNames = result.toolCalls.joinToString(", ") { it.functionName }
+            android.util.Log.d("AlfredBrain", "Tool loop iteration ${5 - maxIterations}: [$callNames]")
             val toolResults = result.toolCalls.map { call ->
                 executedNames.add(call.functionName)
-                Pair(call.id, executeToolCall(call))
+                val res = executeToolCall(call)
+                android.util.Log.d("AlfredBrain", "  ${call.functionName} → ${res.take(100)}")
+                Pair(call.id, res)
             }
-            // On subsequent calls in the tool loop, send all tools
-            // since the LLM might need different tools for follow-up
             result = mistral.sendToolResults(toolResults)
+        }
+
+        if (maxIterations == 0 && result.toolCalls.isNotEmpty()) {
+            android.util.Log.w("AlfredBrain", "Tool loop hit max iterations, forcing stop")
         }
 
         lastExecutedTools = executedNames

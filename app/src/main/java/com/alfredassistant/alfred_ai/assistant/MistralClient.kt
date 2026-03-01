@@ -160,7 +160,58 @@ Today's date is provided in the conversation — use it to calculate correct dat
         memoryContext = context
     }
 
+    /**
+     * Sanitize conversation history so every assistant message that contains
+     * tool_calls is followed by exactly the right number of tool-role messages.
+     * Removes any broken sequences that would cause Mistral error 3230.
+     */
+    private fun sanitizeHistory() {
+        val clean = mutableListOf<JSONObject>()
+        var i = 0
+        while (i < conversationHistory.size) {
+            val msg = conversationHistory[i]
+            val role = msg.optString("role")
+
+            if (role == "assistant" && msg.has("tool_calls") && !msg.isNull("tool_calls")) {
+                val expectedCount = msg.getJSONArray("tool_calls").length()
+                // Look ahead for matching tool responses
+                val toolResponses = mutableListOf<JSONObject>()
+                var k = i + 1
+                while (k < conversationHistory.size &&
+                    conversationHistory[k].optString("role") == "tool") {
+                    toolResponses.add(conversationHistory[k])
+                    k++
+                }
+                if (toolResponses.size == expectedCount) {
+                    // Valid sequence — keep assistant + all tool responses
+                    clean.add(msg)
+                    clean.addAll(toolResponses)
+                } else {
+                    android.util.Log.w("MistralClient",
+                        "sanitize: dropping assistant+tool block — expected $expectedCount tool responses, found ${toolResponses.size}")
+                }
+                i = k
+            } else if (role == "tool") {
+                // Orphaned tool message (not preceded by assistant with tool_calls) — skip
+                android.util.Log.w("MistralClient", "sanitize: dropping orphaned tool msg id=${msg.optString("tool_call_id")}")
+                i++
+            } else {
+                clean.add(msg)
+                i++
+            }
+        }
+        if (clean.size != conversationHistory.size) {
+            android.util.Log.w("MistralClient",
+                "sanitize: history ${conversationHistory.size} → ${clean.size}")
+        }
+        conversationHistory.clear()
+        conversationHistory.addAll(clean)
+    }
+
     private fun makeRequest(): ChatResult {
+        // Sanitize before building the request to avoid mismatched tool call/response errors
+        sanitizeHistory()
+
         val messages = JSONArray()
         val now = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm, EEEE", java.util.Locale.getDefault())
             .format(java.util.Date())
@@ -186,62 +237,110 @@ Today's date is provided in the conversation — use it to calculate correct dat
             put("tool_choice", "auto")
         }
 
-        val request = Request.Builder()
-            .url(BASE_URL)
-            .addHeader("Authorization", "Bearer ${BuildConfig.MISTRAL_API_KEY}")
-            .addHeader("Content-Type", "application/json")
-            .post(body.toString().toRequestBody("application/json".toMediaType()))
-            .build()
+        android.util.Log.d("MistralClient", "→ API call (${conversationHistory.size} history msgs, ${(currentTools ?: allTools).length()} tools)")
 
-        return try {
-            val response = client.newCall(request).execute()
-            val responseBody = response.body?.string() ?: ""
+        // Retry loop for rate limits (429)
+        var retries = 0
+        val maxRetries = 3
+        while (true) {
+            val request = Request.Builder()
+                .url(BASE_URL)
+                .addHeader("Authorization", "Bearer ${BuildConfig.MISTRAL_API_KEY}")
+                .addHeader("Content-Type", "application/json")
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
 
-            if (!response.isSuccessful) {
+            try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string() ?: ""
+
+                if (response.code == 429 && retries < maxRetries) {
+                    retries++
+                    val retryAfterSec = response.header("Retry-After")?.toLongOrNull()
+                    val waitMs = if (retryAfterSec != null) {
+                        retryAfterSec * 1000
+                    } else {
+                        (2000L * retries)
+                    }
+                    android.util.Log.w("MistralClient", "Rate limited (429), retry $retries/$maxRetries in ${waitMs}ms")
+                    Thread.sleep(waitMs)
+                    continue
+                }
+
+                if (!response.isSuccessful) {
+                    android.util.Log.e("MistralClient", "API error ${response.code}: $responseBody")
+                    val errorMsg = try {
+                        val errJson = JSONObject(responseBody)
+                        errJson.optString("message", "").ifBlank { responseBody.take(200) }
+                    } catch (_: Exception) { responseBody.take(200) }
+
+                    if (response.code == 400 && responseBody.contains("function call", ignoreCase = true)) {
+                        android.util.Log.w("MistralClient", "Clearing corrupted conversation history")
+                        conversationHistory.clear()
+                    }
+
+                    return ChatResult(
+                        "Oops, I'm having trouble connecting right now. Error ${response.code}: $errorMsg",
+                        emptyList()
+                    )
+                }
+
+                android.util.Log.d("MistralClient", "← API success (retries=$retries)")
+
+                val json = JSONObject(responseBody)
+                val message = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+
+                // Build a clean assistant message for history
+                val cleanMessage = JSONObject().apply {
+                    put("role", "assistant")
+                    if (message.has("content") && !message.isNull("content")) {
+                        put("content", message.getString("content"))
+                    } else {
+                        put("content", "")
+                    }
+                    if (message.has("tool_calls") && !message.isNull("tool_calls")) {
+                        put("tool_calls", message.getJSONArray("tool_calls"))
+                    }
+                }
+                conversationHistory.add(cleanMessage)
+
+                // Check for tool calls
+                val toolCalls = mutableListOf<ToolCall>()
+                if (message.has("tool_calls") && !message.isNull("tool_calls")) {
+                    val calls = message.getJSONArray("tool_calls")
+                    for (i in 0 until calls.length()) {
+                        val call = calls.getJSONObject(i)
+                        val fn = call.getJSONObject("function")
+                        toolCalls.add(
+                            ToolCall(
+                                id = call.getString("id"),
+                                functionName = fn.getString("name"),
+                                arguments = JSONObject(fn.getString("arguments"))
+                            )
+                        )
+                    }
+                }
+
+                val content = if (message.has("content") && !message.isNull("content")) {
+                    message.getString("content").trim()
+                } else null
+
+                // Only trim when there are no pending tool calls (safe to trim)
+                // If the last message has tool_calls, we're mid-loop — don't touch history
+                if (toolCalls.isEmpty() && conversationHistory.size > 40) {
+                    while (conversationHistory.size > 40) {
+                        conversationHistory.removeAt(0)
+                    }
+                    sanitizeHistory()
+                }
+
+                return ChatResult(content, toolCalls)
+            } catch (e: Exception) {
                 return ChatResult(
-                    "Oops, I'm having trouble connecting right now. Error ${response.code}.",
+                    "Sorry, something went wrong. ${e.message ?: "Unknown error."}",
                     emptyList()
                 )
             }
-
-            val json = JSONObject(responseBody)
-            val message = json.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
-
-            // Add full assistant message to history
-            conversationHistory.add(message)
-
-            // Check for tool calls
-            val toolCalls = mutableListOf<ToolCall>()
-            if (message.has("tool_calls") && !message.isNull("tool_calls")) {
-                val calls = message.getJSONArray("tool_calls")
-                for (i in 0 until calls.length()) {
-                    val call = calls.getJSONObject(i)
-                    val fn = call.getJSONObject("function")
-                    toolCalls.add(
-                        ToolCall(
-                            id = call.getString("id"),
-                            functionName = fn.getString("name"),
-                            arguments = JSONObject(fn.getString("arguments"))
-                        )
-                    )
-                }
-            }
-
-            val content = if (message.has("content") && !message.isNull("content")) {
-                message.getString("content").trim()
-            } else null
-
-            // Trim history
-            while (conversationHistory.size > 40) {
-                conversationHistory.removeAt(0)
-            }
-
-            ChatResult(content, toolCalls)
-        } catch (e: Exception) {
-            ChatResult(
-                "Sorry, something went wrong. ${e.message ?: "Unknown error."}",
-                emptyList()
-            )
         }
     }
 
