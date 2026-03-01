@@ -241,9 +241,30 @@ class MemoryStore(
         return box.query(condition).build().findWithScores().map { it.get() }
     }
 
-    private fun findSimilarMemory(content: String): MemoryEntity? {
-        val results = semanticSearch(content, maxResults = 1)
-        return results.firstOrNull()
+    /**
+     * Find a memory that is genuinely similar to the given content.
+     * Returns null if no memory is close enough (cosine similarity < threshold).
+     * Without this threshold, every new memory would overwrite the nearest existing one.
+     */
+    private fun findSimilarMemory(content: String, threshold: Double = 0.85): MemoryEntity? {
+        val queryEmbedding = embeddingModel.embed(content)
+        val results = box.query(
+            MemoryEntity_.embedding.nearestNeighbors(queryEmbedding, 1)
+        ).build().findWithScores()
+
+        if (results.isEmpty()) return null
+
+        val scored = results.first()
+        // ObjectBox nearestNeighbors returns distance (lower = closer).
+        // Convert to similarity: score from findWithScores is distance-based,
+        // where 0 = identical. We need to check if it's close enough.
+        // ObjectBox HNSW cosine distance = 1 - cosine_similarity, so similarity = 1 - distance.
+        val distance = scored.score
+        val similarity = 1.0 - distance
+
+        Log.d(TAG, "findSimilarMemory: best match='${scored.get().value.take(50)}' similarity=${"%.3f".format(similarity)} threshold=$threshold")
+
+        return if (similarity >= threshold) scored.get() else null
     }
 
     /**
