@@ -12,17 +12,33 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * On-device persistent memory for Alfred.
- * Uses ObjectBox with HNSW vector index for semantic search.
- * Facts and preferences are embedded and stored as vectors,
- * enabling semantic recall instead of exact key matching.
+ * Unified memory layer for Alfred — inspired by mem0's architecture.
+ *
+ * Combines flat memory (MemoryEntity) with knowledge graph (KnowledgeGraph)
+ * into a single facade. Every memory operation writes to both stores:
+ *
+ * 1. MemoryEntity (vector store) — for fast semantic search via embeddings
+ * 2. KnowledgeGraph (graph store) — for entity/relationship traversal
+ *
+ * The LLM sees only 4 tools:
+ *   create_memory  — stores a fact/preference AND extracts entities into the graph
+ *   get_memory     — semantic search over memories + graph context enrichment
+ *   update_memory  — updates existing memory + graph entities
+ *   delete_memory  — removes memory + cleans up graph edges
+ *
+ * Like mem0, retrieval combines vector similarity (find relevant memories)
+ * with graph traversal (enrich with related entities and relationships).
  */
-class MemoryStore(private val context: Context, private val embeddingModel: EmbeddingModel) {
+class MemoryStore(
+    private val context: Context,
+    private val embeddingModel: EmbeddingModel,
+    private val knowledgeGraph: KnowledgeGraph
+) {
 
     companion object {
         private const val TAG = "MemoryStore"
         private const val LEGACY_PREFS = "alfred_memory"
-        private const val MIGRATION_DONE_KEY = "objectbox_migration_done"
+        private const val MIGRATION_DONE_KEY = "objectbox_migration_done_v2"
     }
 
     private val box: Box<MemoryEntity> by lazy {
@@ -33,130 +49,186 @@ class MemoryStore(private val context: Context, private val embeddingModel: Embe
         migrateFromSharedPreferences()
     }
 
-    // ==================== FACTS ====================
-
-    fun rememberFact(key: String, value: String): String {
-        val k = key.lowercase().trim()
-        val v = value.trim()
-        val text = "$k: $v"
-        val embedding = embeddingModel.embed(text)
-
-        // Upsert: update if key exists, insert otherwise
-        val existing = box.query(
-            MemoryEntity_.key.equal(k, StringOrder.CASE_SENSITIVE)
-                .and(MemoryEntity_.type.equal("fact", StringOrder.CASE_SENSITIVE))
-        ).build().findFirst()
-
-        if (existing != null) {
-            existing.value = v
-            existing.embedding = embedding
-            existing.updatedAt = System.currentTimeMillis()
-            box.put(existing)
-        } else {
-            box.put(MemoryEntity(
-                key = k, value = v, type = "fact",
-                embedding = embedding
-            ))
-        }
-        return "Remembered: $key = $value"
-    }
-
-    fun recallFact(key: String): String {
-        val k = key.lowercase().trim()
-        // Try exact match first
-        val exact = box.query(
-            MemoryEntity_.key.equal(k, StringOrder.CASE_SENSITIVE)
-                .and(MemoryEntity_.type.equal("fact", StringOrder.CASE_SENSITIVE))
-        ).build().findFirst()
-        if (exact != null) return exact.value
-
-        // Fall back to semantic search
-        val results = semanticSearch(k, maxResults = 1, type = "fact")
-        return if (results.isNotEmpty()) {
-            results.first().value
-        } else {
-            "I don't have that information stored, sir."
-        }
-    }
-
-    fun getAllFacts(): String {
-        val facts = box.query(
-            MemoryEntity_.type.equal("fact", StringOrder.CASE_SENSITIVE)
-        ).build().find()
-        if (facts.isEmpty()) return "No facts stored yet."
-        val result = JSONArray()
-        facts.forEach { f ->
-            result.put(JSONObject().apply {
-                put("key", f.key)
-                put("value", f.value)
-            })
-        }
-        return result.toString()
-    }
-
-    fun forgetFact(key: String): String {
-        val k = key.lowercase().trim()
-        val existing = box.query(
-            MemoryEntity_.key.equal(k, StringOrder.CASE_SENSITIVE)
-                .and(MemoryEntity_.type.equal("fact", StringOrder.CASE_SENSITIVE))
-        ).build().find()
-        return if (existing.isNotEmpty()) {
-            box.remove(existing as Collection<MemoryEntity>)
-            "Forgotten: $key"
-        } else {
-            "I don't have that stored, sir."
-        }
-    }
-
-    // ==================== PREFERENCES ====================
-
-    fun setPreference(key: String, value: String): String {
-        val k = key.lowercase().trim()
-        val v = value.trim()
-        val text = "preference $k: $v"
-        val embedding = embeddingModel.embed(text)
-
-        val existing = box.query(
-            MemoryEntity_.key.equal(k, StringOrder.CASE_SENSITIVE)
-                .and(MemoryEntity_.type.equal("preference", StringOrder.CASE_SENSITIVE))
-        ).build().findFirst()
-
-        if (existing != null) {
-            existing.value = v
-            existing.embedding = embedding
-            existing.updatedAt = System.currentTimeMillis()
-            box.put(existing)
-        } else {
-            box.put(MemoryEntity(
-                key = k, value = v, type = "preference",
-                embedding = embedding
-            ))
-        }
-        return "Preference saved: $key = $value"
-    }
-
-    fun getAllPreferences(): String {
-        val prefs = box.query(
-            MemoryEntity_.type.equal("preference", StringOrder.CASE_SENSITIVE)
-        ).build().find()
-        if (prefs.isEmpty()) return "No preferences stored yet."
-        val result = JSONArray()
-        prefs.forEach { p ->
-            result.put(JSONObject().apply {
-                put("key", p.key)
-                put("value", p.value)
-            })
-        }
-        return result.toString()
-    }
-
-    // ==================== SEMANTIC SEARCH ====================
+    // ==================== CREATE ====================
 
     /**
-     * Search memories by semantic similarity to the query.
-     * Returns top-K most relevant memories.
+     * Create a memory. Writes to both vector store and knowledge graph.
+     * The LLM extracts entities and relations — we just store them.
+     *
+     * @param content Natural language memory, e.g. "My friend John lives in NYC"
+     * @param type "fact" or "preference"
+     * @param entities LLM-extracted entities as JSONArray of {name, type, attributes?}
+     * @param relations LLM-extracted relations as JSONArray of {source, relation, target}
      */
-    fun semanticSearch(query: String, maxResults: Int = 5, type: String? = null): List<MemoryEntity> {
+    fun createMemory(
+        content: String,
+        type: String = "fact",
+        entities: JSONArray? = null,
+        relations: JSONArray? = null
+    ): String {
+        val normalized = content.trim()
+        val embedding = embeddingModel.embed(normalized)
+
+        // Check for duplicate/similar existing memory
+        val similar = findSimilarMemory(normalized)
+        if (similar != null && similar.value.equals(normalized, ignoreCase = true)) {
+            return "I already know that."
+        }
+
+        // If similar memory exists, update it instead (mem0-style consolidation)
+        if (similar != null) {
+            similar.value = normalized
+            similar.embedding = embedding
+            similar.updatedAt = System.currentTimeMillis()
+            box.put(similar)
+            knowledgeGraph.storeStructured(entities, relations)
+            return "Updated memory: $normalized"
+        }
+
+        // Create new memory
+        val key = generateKey(normalized)
+        box.put(MemoryEntity(
+            key = key,
+            value = normalized,
+            type = type,
+            embedding = embedding
+        ))
+
+        // Store LLM-extracted entities and relationships into knowledge graph
+        knowledgeGraph.storeStructured(entities, relations)
+
+        Log.d(TAG, "Created memory [$type]: $normalized")
+        return "Remembered: $normalized"
+    }
+
+    // ==================== GET (SEARCH) ====================
+
+    /**
+     * Search memories by natural language query.
+     * Combines vector similarity search with graph context enrichment.
+     * Returns a rich context string for the LLM.
+     */
+    fun getMemory(query: String): String {
+        val parts = mutableListOf<String>()
+
+        // 1. Vector search — find semantically similar memories
+        val memories = semanticSearch(query, maxResults = 8)
+        if (memories.isNotEmpty()) {
+            val memList = memories.joinToString("; ") { it.value }
+            parts.add("Memories: $memList")
+        }
+
+        // 2. Graph search — find related entities and traverse relationships
+        val graphContext = knowledgeGraph.getGraphContext(query, maxNodes = 5)
+        if (graphContext.isNotBlank()) {
+            parts.add(graphContext)
+        }
+
+        return if (parts.isEmpty()) {
+            "No memories found for '$query'."
+        } else {
+            parts.joinToString("\n")
+        }
+    }
+
+    // ==================== UPDATE ====================
+
+    /**
+     * Update an existing memory. Finds the closest match and updates it.
+     * Also rebuilds the knowledge graph from LLM-extracted entities/relations.
+     *
+     * @param oldContent The memory to find (semantic match)
+     * @param newContent The updated content
+     * @param entities LLM-extracted entities for the new content
+     * @param relations LLM-extracted relations for the new content
+     */
+    fun updateMemory(
+        oldContent: String,
+        newContent: String,
+        entities: JSONArray? = null,
+        relations: JSONArray? = null
+    ): String {
+        val target = findSimilarMemory(oldContent)
+            ?: return "No matching memory found to update."
+
+        val oldValue = target.value
+        target.value = newContent.trim()
+        target.embedding = embeddingModel.embed(newContent.trim())
+        target.updatedAt = System.currentTimeMillis()
+        box.put(target)
+
+        // Rebuild graph from LLM-extracted structure
+        knowledgeGraph.storeStructured(entities, relations)
+
+        Log.d(TAG, "Updated memory: '$oldValue' → '${newContent.trim()}'")
+        return "Updated: $newContent"
+    }
+
+    // ==================== DELETE ====================
+
+    /**
+     * Delete a memory by semantic match.
+     * Also removes associated graph nodes and edges.
+     */
+    fun deleteMemory(content: String): String {
+        val normalized = content.trim().lowercase()
+
+        // "all" / "everything" → wipe both stores
+        if (normalized in listOf("all", "everything", "all memories", "everything you know")) {
+            val count = box.count()
+            box.removeAll()
+            knowledgeGraph.clearAll()
+            Log.d(TAG, "Deleted all $count memories and cleared graph")
+            return "All memories and knowledge graph cleared."
+        }
+
+        val target = findSimilarMemory(content)
+            ?: return "No matching memory found to delete."
+
+        val deleted = target.value
+        box.remove(target)
+
+        Log.d(TAG, "Deleted memory: $deleted")
+        return "Forgotten: $deleted"
+    }
+
+    // ==================== CONTEXT FOR LLM ====================
+
+    /**
+     * Get enriched memory context for the current user query.
+     * This is injected into the system prompt before each LLM call.
+     *
+     * Combines:
+     * - Top-K semantically relevant memories (vector search)
+     * - Related graph entities and relationships (graph traversal)
+     */
+    fun getRelevantContext(userQuery: String): String {
+        val parts = mutableListOf<String>()
+
+        // Vector search for relevant memories
+        val relevant = semanticSearch(userQuery, maxResults = 8)
+        val facts = relevant.filter { it.type == "fact" }
+        val prefs = relevant.filter { it.type == "preference" }
+
+        if (facts.isNotEmpty()) {
+            parts.add("Relevant memories: ${facts.joinToString("; ") { it.value }}")
+        }
+        if (prefs.isNotEmpty()) {
+            parts.add("User preferences: ${prefs.joinToString("; ") { it.value }}")
+        }
+
+        // Graph context — entity relationships
+        val graphContext = knowledgeGraph.getGraphContext(userQuery, maxNodes = 5)
+        if (graphContext.isNotBlank()) {
+            parts.add(graphContext)
+        }
+
+        return if (parts.isEmpty()) "" else parts.joinToString("\n")
+    }
+
+    // ==================== INTERNAL ====================
+
+    private fun semanticSearch(query: String, maxResults: Int = 5, type: String? = null): List<MemoryEntity> {
         val queryEmbedding = embeddingModel.embed(query)
         val condition = if (type != null) {
             MemoryEntity_.embedding.nearestNeighbors(queryEmbedding, maxResults)
@@ -164,63 +236,30 @@ class MemoryStore(private val context: Context, private val embeddingModel: Embe
         } else {
             MemoryEntity_.embedding.nearestNeighbors(queryEmbedding, maxResults)
         }
-        val results = box.query(condition).build().findWithScores()
-        return results.map { it.get() }
+        return box.query(condition).build().findWithScores().map { it.get() }
     }
 
-    // ==================== CONTEXT FOR AI ====================
-
-    /**
-     * Get memory context relevant to the current user query.
-     * Uses semantic search to find the most relevant memories.
-     */
-    fun getRelevantMemoryContext(userQuery: String): String {
-        val parts = mutableListOf<String>()
-
-        // Get semantically relevant memories (top 10)
-        val relevant = semanticSearch(userQuery, maxResults = 10)
-        val facts = relevant.filter { it.type == "fact" }
-        val prefs = relevant.filter { it.type == "preference" }
-
-        if (facts.isNotEmpty()) {
-            val factsList = facts.joinToString("; ") { "${it.key}: ${it.value}" }
-            parts.add("Relevant facts: $factsList")
-        }
-        if (prefs.isNotEmpty()) {
-            val prefsList = prefs.joinToString("; ") { "${it.key}: ${it.value}" }
-            parts.add("User preferences: $prefsList")
-        }
-
-        return if (parts.isEmpty()) "" else parts.joinToString("\n")
+    private fun findSimilarMemory(content: String): MemoryEntity? {
+        val results = semanticSearch(content, maxResults = 1)
+        return results.firstOrNull()
     }
 
     /**
-     * Legacy method — returns all memory context (for backward compat).
+     * Generate a short key from content for backward compat with MemoryEntity.
+     * Takes first few meaningful words.
      */
-    fun getMemoryContext(): String {
-        val facts = box.query(
-            MemoryEntity_.type.equal("fact", StringOrder.CASE_SENSITIVE)
-        ).build().find()
-        val prefs = box.query(
-            MemoryEntity_.type.equal("preference", StringOrder.CASE_SENSITIVE)
-        ).build().find()
-        val parts = mutableListOf<String>()
-
-        if (facts.isNotEmpty()) {
-            val factsList = facts.joinToString("; ") { "${it.key}: ${it.value}" }
-            parts.add("Known facts: $factsList")
-        }
-        if (prefs.isNotEmpty()) {
-            val prefsList = prefs.joinToString("; ") { "${it.key}: ${it.value}" }
-            parts.add("User preferences: $prefsList")
-        }
-
-        return if (parts.isEmpty()) "" else parts.joinToString("\n")
+    private fun generateKey(content: String): String {
+        return content.lowercase()
+            .replace(Regex("[^a-z0-9\\s]"), "")
+            .split("\\s+".toRegex())
+            .filter { it.length > 2 }
+            .take(4)
+            .joinToString("_")
+            .ifBlank { "memory_${System.currentTimeMillis()}" }
     }
 
     // ==================== DEBUG ====================
 
-    /** Return all entries as key→value pairs with type prefix for debug UI */
     fun getDebugEntries(): List<Pair<String, String>> {
         return box.all.map { entry ->
             val prefix = if (entry.type == "fact") "📝" else "⚙️"
@@ -241,18 +280,16 @@ class MemoryStore(private val context: Context, private val embeddingModel: Embe
 
             val factsJson = JSONObject(factsRaw)
             factsJson.keys().forEach { key ->
-                val value = factsJson.getString(key)
-                rememberFact(key, value)
+                createMemory("$key: ${factsJson.getString(key)}", "fact")
             }
 
             val prefsJson = JSONObject(prefsRaw)
             prefsJson.keys().forEach { key ->
-                val value = prefsJson.getString(key)
-                setPreference(key, value)
+                createMemory("preference $key: ${prefsJson.getString(key)}", "preference")
             }
 
             migrationPrefs.edit().putBoolean(MIGRATION_DONE_KEY, true).apply()
-            Log.i(TAG, "Migrated ${factsJson.length()} facts and ${prefsJson.length()} preferences to ObjectBox")
+            Log.i(TAG, "Migrated ${factsJson.length()} facts and ${prefsJson.length()} preferences")
         } catch (e: Exception) {
             Log.w(TAG, "Migration from SharedPreferences failed", e)
         }

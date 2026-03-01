@@ -10,26 +10,28 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Embedding-based tool registry.
- * Stores tool definitions with vector embeddings and retrieves
- * only the most relevant tools for a given user prompt.
- * This reduces token usage and improves LLM accuracy by sending
- * only 5-8 relevant tools instead of 30+.
+ * Embedding-based tool registry with smart routing.
+ *
+ * Strategy:
+ * - Memory & knowledge tools are ALWAYS sent (the LLM needs them for every interaction)
+ * - present_options is ALWAYS sent (confirmation flow)
+ * - Other tools are selected via semantic similarity to the user's prompt
+ * - Default top-K for non-essential tools is 4 (so total ≈ 8-12 tools instead of 40+)
  */
 class ToolRegistry(private val embeddingModel: EmbeddingModel) {
 
     companion object {
         private const val TAG = "ToolRegistry"
-        private const val DEFAULT_TOP_K = 8
-        /** Tools that are always included regardless of similarity */
+        /** Max non-essential tools to include via semantic search */
+        private const val DEFAULT_TOP_K = 4
+
+        /** Tools that are ALWAYS included — unified memory (4) + confirmation (1) */
         private val ALWAYS_INCLUDE = setOf(
             "present_options",
-            "remember_fact",
-            "recall_fact",
-            "get_all_memories",
-            "forget_fact",
-            "set_preference",
-            "query_knowledge_graph"
+            "create_memory",
+            "get_memory",
+            "update_memory",
+            "delete_memory"
         )
     }
 
@@ -46,7 +48,6 @@ class ToolRegistry(private val embeddingModel: EmbeddingModel) {
     fun registerTools(tools: JSONArray) {
         if (initialized && box.count() > 0) return
 
-        // Clear existing tools and re-register
         box.removeAll()
 
         for (i in 0 until tools.length()) {
@@ -71,16 +72,16 @@ class ToolRegistry(private val embeddingModel: EmbeddingModel) {
 
     /**
      * Get the most relevant tools for a user prompt.
-     * Returns a JSONArray of tool definitions to send to the LLM.
      *
-     * @param userPrompt The user's input text
-     * @param topK Maximum number of tools to return (excluding always-include)
+     * Always includes: memory tools + present_options (~7 tools)
+     * Adds: top-K semantically similar non-essential tools (default 4)
+     * Total sent to LLM: ~8-11 tools instead of 40+
      */
     fun getRelevantTools(userPrompt: String, topK: Int = DEFAULT_TOP_K): JSONArray {
         val result = JSONArray()
         val addedNames = mutableSetOf<String>()
 
-        // 1. Always include essential tools
+        // 1. Always include essential tools (memory + confirmation)
         val alwaysTools = box.query(ToolEntity_.alwaysInclude.equal(true)).build().find()
         for (tool in alwaysTools) {
             try {
@@ -91,7 +92,7 @@ class ToolRegistry(private val embeddingModel: EmbeddingModel) {
             }
         }
 
-        // 2. Semantic search for relevant tools
+        // 2. Semantic search for relevant non-essential tools
         val queryEmbedding = embeddingModel.embed(userPrompt)
         val similar = box.query(
             ToolEntity_.embedding.nearestNeighbors(queryEmbedding, topK + ALWAYS_INCLUDE.size)
@@ -111,12 +112,12 @@ class ToolRegistry(private val embeddingModel: EmbeddingModel) {
             }
         }
 
-        Log.d(TAG, "Selected ${result.length()} tools for prompt: ${userPrompt.take(50)}...")
+        Log.d(TAG, "Selected ${result.length()} tools (${alwaysTools.size} always + $added semantic) for: ${userPrompt.take(50)}...")
         return result
     }
 
     /**
-     * Get all registered tools (for backward compatibility or full-tool-list scenarios).
+     * Get all registered tools (for backward compatibility).
      */
     fun getAllTools(): JSONArray {
         val result = JSONArray()

@@ -36,8 +36,8 @@ class AlfredBrain(context: Context) {
 
     // Vector DB + Embedding infrastructure
     private val embeddingModel = EmbeddingModel(context)
-    private val memoryStore = MemoryStore(context, embeddingModel)
     private val knowledgeGraph = KnowledgeGraph(embeddingModel)
+    private val memoryStore = MemoryStore(context, embeddingModel, knowledgeGraph)
     private val toolRegistry = ToolRegistry(embeddingModel)
 
     // Callback for when AI wants to show options to the user
@@ -92,13 +92,9 @@ class AlfredBrain(context: Context) {
 
     suspend fun processInput(userSpeech: String): String {
         didRedirect = false
-        // Inject relevant memory context (semantic search based on user query)
-        val memoryContext = memoryStore.getRelevantMemoryContext(userSpeech)
-        val graphContext = knowledgeGraph.getGraphContext(userSpeech)
-        val fullContext = listOf(memoryContext, graphContext)
-            .filter { it.isNotBlank() }
-            .joinToString("\n")
-        mistral.setMemoryContext(fullContext)
+        // Inject relevant memory + graph context (unified retrieval)
+        val memoryContext = memoryStore.getRelevantContext(userSpeech)
+        mistral.setMemoryContext(memoryContext)
 
         // Get only relevant tools for this query (smart routing)
         val relevantTools = toolRegistry.getRelevantTools(userSpeech)
@@ -290,21 +286,26 @@ class AlfredBrain(context: Context) {
                 }
                 "clear_notifications" -> notificationAction.clearNotifications()
 
-                // --- Memory (now backed by ObjectBox + vector search) ---
-                "remember_fact" -> {
-                    val key = call.arguments.getString("key")
-                    val value = call.arguments.getString("value")
-                    // Also extract into knowledge graph
-                    knowledgeGraph.extractAndStore(key, value)
-                    memoryStore.rememberFact(key, value)
+                // --- Unified Memory (vector + graph) ---
+                "create_memory" -> {
+                    val content = call.arguments.getString("content")
+                    val type = call.arguments.optString("type", "fact")
+                    val entities = call.arguments.optJSONArray("entities")
+                    val relations = call.arguments.optJSONArray("relations")
+                    memoryStore.createMemory(content, type, entities, relations)
                 }
-                "recall_fact" -> memoryStore.recallFact(call.arguments.getString("key"))
-                "get_all_memories" -> memoryStore.getAllFacts() + "\n" + memoryStore.getAllPreferences()
-                "forget_fact" -> memoryStore.forgetFact(call.arguments.getString("key"))
-                "set_preference" -> memoryStore.setPreference(call.arguments.getString("key"), call.arguments.getString("value"))
-
-                // --- Knowledge Graph ---
-                "query_knowledge_graph" -> knowledgeGraph.queryGraph(call.arguments.getString("topic"))
+                "get_memory" -> memoryStore.getMemory(call.arguments.getString("query"))
+                "update_memory" -> {
+                    val entities = call.arguments.optJSONArray("entities")
+                    val relations = call.arguments.optJSONArray("relations")
+                    memoryStore.updateMemory(
+                        call.arguments.getString("old_content"),
+                        call.arguments.getString("new_content"),
+                        entities,
+                        relations
+                    )
+                }
+                "delete_memory" -> memoryStore.deleteMemory(call.arguments.getString("content"))
 
                 // --- Options / Confirmation ---
                 "present_options" -> {

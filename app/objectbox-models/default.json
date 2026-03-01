@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:8693062432509910103",
-      "lastPropertyId": "5:4659351569340971810",
+      "lastPropertyId": "8:7823456789012345678",
       "name": "KnowledgeEdge",
       "properties": [
         {
@@ -39,13 +39,30 @@
           "id": "5:4659351569340971810",
           "name": "createdAt",
           "type": 6
+        },
+        {
+          "id": "6:7823456789012345671",
+          "name": "uniqueKey",
+          "indexId": "12:7823456789012345675",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "7:7823456789012345672",
+          "name": "attributes",
+          "type": 9
+        },
+        {
+          "id": "8:7823456789012345678",
+          "name": "updatedAt",
+          "type": 6
         }
       ],
       "relations": []
     },
     {
       "id": "2:2292011825439859252",
-      "lastPropertyId": "6:4396309820242981638",
+      "lastPropertyId": "9:7823456789012345680",
       "name": "KnowledgeNode",
       "properties": [
         {
@@ -84,6 +101,23 @@
           "indexId": "6:5580861962389408252",
           "type": 28,
           "flags": 8
+        },
+        {
+          "id": "7:7823456789012345676",
+          "name": "uniqueKey",
+          "indexId": "13:7823456789012345677",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "8:7823456789012345679",
+          "name": "attributes",
+          "type": 9
+        },
+        {
+          "id": "9:7823456789012345680",
+          "name": "updatedAt",
+          "type": 6
         }
       ],
       "relations": []
@@ -183,7 +217,7 @@
     }
   ],
   "lastEntityId": "4:4644066011765137137",
-  "lastIndexId": "11:5951664570077819337",
+  "lastIndexId": "13:7823456789012345677",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
