@@ -71,6 +71,9 @@ android {
 
 dependencies {
 
+    // Sherpa-onnx AAR (local — downloaded by setup-sherpa-onnx.sh)
+    implementation(files("libs/sherpa-onnx-static-link-onnxruntime-1.12.28.aar"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
