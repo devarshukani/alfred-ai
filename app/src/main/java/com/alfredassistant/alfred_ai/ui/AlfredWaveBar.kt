@@ -171,7 +171,7 @@ fun AlfredWaveBar(
     Canvas(
         modifier = modifier
             .fillMaxWidth()
-            .height(220.dp)  // taller canvas = more room for smooth falloff
+            .height(140.dp)  // compact wave bar
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }

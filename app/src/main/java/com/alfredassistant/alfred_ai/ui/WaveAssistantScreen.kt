@@ -66,11 +66,19 @@ fun WaveAssistantScreen(
             }
     ) {
         // Main content at bottom
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Bottom,
+        Box(
+            contentAlignment = Alignment.BottomCenter,
             modifier = Modifier.fillMaxSize()
         ) {
+            // Wave bar at the very bottom (renders first = behind)
+            AlfredWaveBar(
+                state = activeState,
+                audioLevel = audioLevel,
+                onClick = onMicTap,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+
+            // Confirmation box above the wave bar (renders second = in front)
             ConfirmationBox(
                 confirmation = activeConfirmation,
                 onOptionSelected = { option ->
@@ -81,13 +89,9 @@ fun WaveAssistantScreen(
                         onOptionSelected(option)
                     }
                 },
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
-
-            AlfredWaveBar(
-                state = activeState,
-                audioLevel = audioLevel,
-                onClick = onMicTap
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 140.dp)
             )
         }
 
