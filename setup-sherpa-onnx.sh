@@ -13,7 +13,7 @@ SHERPA_VERSION="1.12.28"
 # ASR models:  https://k2-fsa.github.io/sherpa/onnx/pretrained_models/
 # ============================================================
 TTS_MODEL="vits-piper-en_US-ryan-medium"
-ASR_MODEL="sherpa-onnx-streaming-zipformer-en-20M-2023-02-17"
+ASR_MODEL="sherpa-onnx-moonshine-tiny-en-int8"
 
 ASSETS="app/src/main/assets"
 TTS_DIR="$ASSETS/tts-model"
@@ -22,7 +22,7 @@ ASR_DIR="$ASSETS/asr-model"
 # ---------------------------------------------------------------
 # 1. Native JNI libraries (shared by TTS + ASR)
 # ---------------------------------------------------------------
-echo "=== [1/3] Downloading sherpa-onnx v${SHERPA_VERSION} Android native libraries ==="
+echo "=== [1/4] Downloading sherpa-onnx v${SHERPA_VERSION} Android native libraries ==="
 
 LIBS_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VERSION}/sherpa-onnx-v${SHERPA_VERSION}-android.tar.bz2"
 LIBS_ARCHIVE="sherpa-onnx-android.tar.bz2"
@@ -46,7 +46,7 @@ done
 # 2. TTS model
 # ---------------------------------------------------------------
 echo ""
-echo "=== [2/3] Downloading TTS model: ${TTS_MODEL} ==="
+echo "=== [2/4] Downloading TTS model: ${TTS_MODEL} ==="
 
 TTS_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${TTS_MODEL}.tar.bz2"
 TTS_ARCHIVE="${TTS_MODEL}.tar.bz2"
@@ -66,10 +66,10 @@ rm -rf "$TTS_DIR" 2>/dev/null || true
 mv "$ASSETS/$TTS_MODEL" "$TTS_DIR"
 
 # ---------------------------------------------------------------
-# 3. ASR model (streaming zipformer, int8 quantised)
+# 3. ASR model (Moonshine tiny, int8 quantised, offline)
 # ---------------------------------------------------------------
 echo ""
-echo "=== [3/3] Downloading ASR model: ${ASR_MODEL} ==="
+echo "=== [3/4] Downloading ASR model: ${ASR_MODEL} ==="
 
 ASR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/${ASR_MODEL}.tar.bz2"
 ASR_ARCHIVE="${ASR_MODEL}.tar.bz2"
@@ -83,13 +83,24 @@ tar xjf "$ASR_ARCHIVE" -C "$ASSETS"
 
 rm -rf "$ASSETS/$ASR_MODEL/test_wavs" 2>/dev/null || true
 rm -f "$ASSETS/$ASR_MODEL"/*.sh "$ASSETS/$ASR_MODEL"/README.md 2>/dev/null || true
-# Keep only int8 encoder/joiner + fp32 decoder (smallest combo)
-rm -f "$ASSETS/$ASR_MODEL"/encoder-*-avg-1.onnx 2>/dev/null || true
-rm -f "$ASSETS/$ASR_MODEL"/joiner-*-avg-1.onnx 2>/dev/null || true
-rm -f "$ASSETS/$ASR_MODEL"/decoder-*-avg-1.int8.onnx 2>/dev/null || true
 
 rm -rf "$ASR_DIR" 2>/dev/null || true
 mv "$ASSETS/$ASR_MODEL" "$ASR_DIR"
+
+# ---------------------------------------------------------------
+# 4. Silero VAD model (voice activity detection)
+# ---------------------------------------------------------------
+echo ""
+echo "=== [4/4] Downloading Silero VAD model ==="
+
+VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+VAD_DEST="$ASR_DIR/silero_vad.onnx"
+
+if [ ! -f "$VAD_DEST" ]; then
+    wget -O "$VAD_DEST" "$VAD_URL"
+fi
+
+echo "  VAD model saved to $VAD_DEST"
 
 # ---------------------------------------------------------------
 # Done
@@ -100,5 +111,6 @@ echo ""
 echo "  JNI libs:  app/src/main/jniLibs/"
 echo "  TTS model: $TTS_DIR/"
 echo "  ASR model: $ASR_DIR/"
+echo "  VAD model: $VAD_DEST"
 echo ""
 echo "To swap models, edit TTS_MODEL / ASR_MODEL at the top and re-run."

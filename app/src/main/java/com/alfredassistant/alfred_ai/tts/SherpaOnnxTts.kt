@@ -26,7 +26,8 @@ object SherpaOnnxTts {
     var tts: OfflineTts? = null
         private set
 
-    private var audioTrack: AudioTrack? = null
+    @Volatile
+    private var currentTrack: AudioTrack? = null
 
     @Volatile
     private var stopped = false
@@ -60,11 +61,10 @@ object SherpaOnnxTts {
         )
 
         tts = OfflineTts(assetManager = assets, config = config)
-        initAudioTrack()
         Log.i(TAG, "TTS ready — model=$modelName sampleRate=${tts?.sampleRate()} speakers=${tts?.numSpeakers()}")
     }
 
-    private fun initAudioTrack() {
+    private fun createAudioTrack(): AudioTrack {
         val sampleRate = tts?.sampleRate() ?: 22050
         val bufLength = AudioTrack.getMinBufferSize(
             sampleRate,
@@ -83,7 +83,7 @@ object SherpaOnnxTts {
             .setSampleRate(sampleRate)
             .build()
 
-        audioTrack = AudioTrack(
+        return AudioTrack(
             attr, format, bufLength, AudioTrack.MODE_STREAM,
             AudioManager.AUDIO_SESSION_ID_GENERATE
         )
@@ -106,40 +106,53 @@ object SherpaOnnxTts {
         }
 
         stopped = false
+        Log.d(TAG, "🔊 TTS generating: \"$text\"")
         val audio = engine.generate(text = text, sid = speakerId, speed = speed)
 
         if (stopped || audio.samples.isEmpty()) {
+            Log.d(TAG, "🔊 TTS cancelled or empty audio")
             onDone()
             return
         }
 
-        audioTrack?.pause()
-        audioTrack?.flush()
-        audioTrack?.play()
+        val track = createAudioTrack()
+        currentTrack = track
+
+        Log.d(TAG, "🔊 TTS playing — ${audio.samples.size} samples (${audio.samples.size / (tts?.sampleRate() ?: 22050)}s)")
+        track.play()
         onStart()
 
-        val chunkSize = 4096
-        var offset = 0
-        while (offset < audio.samples.size && !stopped) {
-            val end = minOf(offset + chunkSize, audio.samples.size)
-            audioTrack?.write(audio.samples, offset, end - offset, AudioTrack.WRITE_BLOCKING)
-            offset = end
+        try {
+            val chunkSize = 4096
+            var offset = 0
+            while (offset < audio.samples.size && !stopped) {
+                val end = minOf(offset + chunkSize, audio.samples.size)
+                track.write(audio.samples, offset, end - offset, AudioTrack.WRITE_BLOCKING)
+                offset = end
+            }
+            track.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "🔊 AudioTrack error during playback: $e")
+        } finally {
+            track.release()
+            if (currentTrack === track) currentTrack = null
         }
-
-        audioTrack?.stop()
+        Log.d(TAG, "🔊 TTS done: \"$text\"")
         onDone()
     }
 
     fun stop() {
         stopped = true
-        audioTrack?.pause()
-        audioTrack?.flush()
+        try {
+            currentTrack?.pause()
+            currentTrack?.flush()
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "AudioTrack already released during stop: $e")
+        }
     }
 
     fun shutdown() {
         stop()
-        audioTrack?.release()
-        audioTrack = null
         tts?.free()
         tts = null
     }
