@@ -12,17 +12,17 @@ import kotlin.math.sqrt
  * On-device text embedding using all-MiniLM-L6-v2 ONNX model.
  * Produces 384-dimensional embeddings for semantic similarity search.
  *
- * Required assets (downloaded by setup-embedding-model.sh):
- *   assets/embedding-model/all-MiniLM-L6-v2.onnx
- *   assets/embedding-model/vocab.txt
+ * Required assets (downloaded by setup-models.sh):
+ *   assets/models/embedding/model.onnx
+ *   assets/models/embedding/vocab.txt
  */
 class EmbeddingModel(private val context: Context) {
 
     companion object {
         private const val TAG = "EmbeddingModel"
         const val DIMENSIONS = 384
-        private const val MODEL_PATH = "embedding-model/all-MiniLM-L6-v2.onnx"
-        private const val VOCAB_PATH = "embedding-model/vocab.txt"
+        private const val MODEL_PATH = "models/embedding/model.onnx"
+        private const val VOCAB_PATH = "models/embedding/vocab.txt"
         private const val MAX_SEQ_LENGTH = 128
     }
 

@@ -16,9 +16,7 @@ import java.io.IOException
 
 private const val TAG = "SherpaOnnxTts"
 
-// Generic asset directory — the setup script places any model here.
-// Change the model by editing setup-sherpa-tts.sh only.
-private const val MODEL_DIR = "tts-model"
+private const val MODEL_DIR = "models/tts"
 private const val DATA_DIR = "$MODEL_DIR/espeak-ng-data"
 
 object SherpaOnnxTts {
@@ -39,29 +37,24 @@ object SherpaOnnxTts {
 
         val assets = context.assets
 
-        // Find the .onnx model file automatically
-        val modelName = assets.list(MODEL_DIR)
-            ?.firstOrNull { it.endsWith(".onnx") }
-            ?: error("No .onnx model found in assets/$MODEL_DIR")
-
         // espeak-ng-data must live on the real filesystem for native code
         val externalDataDir = copyDataDir(context, DATA_DIR)
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
-                    model = "$MODEL_DIR/$modelName",
+                    model = "$MODEL_DIR/model.onnx",
                     tokens = "$MODEL_DIR/tokens.txt",
                     dataDir = externalDataDir,
                 ),
                 numThreads = 2,
                 debug = false,
-                provider = "cpu",
+                provider = "nnapi",
             ),
         )
 
         tts = OfflineTts(assetManager = assets, config = config)
-        Log.i(TAG, "TTS ready — model=$modelName sampleRate=${tts?.sampleRate()} speakers=${tts?.numSpeakers()}")
+        Log.i(TAG, "TTS ready — sampleRate=${tts?.sampleRate()} speakers=${tts?.numSpeakers()}")
     }
 
     private fun createAudioTrack(): AudioTrack {
