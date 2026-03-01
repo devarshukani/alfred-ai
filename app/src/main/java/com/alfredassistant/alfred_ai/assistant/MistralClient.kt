@@ -336,7 +336,7 @@ Today's date is provided in the conversation."""
             put("type", "function")
             put("function", JSONObject().apply {
                 put("name", "search_contacts")
-                put("description", "Search the user's contacts by name. Returns matching contacts with all their phone numbers and labels.")
+                put("description", "Search contacts by name with fuzzy matching. Handles voice transcription errors (e.g. 'sukh bava' finds 'Sukhmeet Bawa'). Pass the name as heard from voice input — the search handles misspellings. If only one contact is found, use it directly without asking for confirmation.")
                 put("parameters", JSONObject().apply {
                     put("type", "object")
                     put("properties", JSONObject().apply {

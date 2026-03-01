@@ -148,7 +148,12 @@ class AlfredBrain(context: Context) {
                     val q = call.arguments.getString("query")
                     val contacts = phoneAction.searchContacts(q)
                     if (contacts.isEmpty()) "No contacts found matching \"$q\"."
-                    else contacts.toJsonString()
+                    else if (contacts.size == 1) {
+                        // Single match — return it directly, no ambiguity
+                        "Found: ${contacts.toJsonString()}"
+                    } else {
+                        contacts.toJsonString()
+                    }
                 }
                 "make_call" -> {
                     phoneAction.makeCall(call.arguments.getString("phone_number"))
