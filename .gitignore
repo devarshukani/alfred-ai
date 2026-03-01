@@ -24,3 +24,7 @@ sherpa-onnx-android.tar.bz2
 vits-piper-*.tar.bz2
 sherpa-onnx-streaming-*.tar.bz2
 sherpa-onnx-moonshine-*.tar.bz2
+
+# Embedding model (downloaded by setup-embedding-model.sh)
+app/src/main/assets/embedding-model/all-MiniLM-L6-v2.onnx
+app/src/main/assets/embedding-model/vocab.txt

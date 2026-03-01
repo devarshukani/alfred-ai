@@ -82,6 +82,9 @@ You have access to tools for:
 - Memory: remember facts and preferences the user tells you (e.g. "my name is...", "I prefer..."). 
   Use remember_fact for things the user wants you to remember. Use recall_fact to look up stored info.
   Use set_preference for user preferences. Always check memory when it might be relevant.
+- Knowledge Graph: query_knowledge_graph to find connections between things the user has told you.
+  The knowledge graph automatically builds relationships when you remember facts.
+  Use it to answer questions like "what do you know about me" or "what are my interests".
 
 When setting alarms, use 24-hour format internally. Confirm the time with the user naturally.
 When setting timers, convert the user's request to seconds (e.g. "5 minutes" = 300 seconds).
@@ -96,13 +99,26 @@ Today's date is provided in the conversation — use it to calculate correct dat
 
     private val conversationHistory = mutableListOf<JSONObject>()
 
-    private val tools: JSONArray by lazy { buildTools() }
+    private val allTools: JSONArray by lazy { buildTools() }
+
+    /** Current tools to send in the next request (can be filtered per-query) */
+    private var currentTools: JSONArray? = null
 
     fun clearHistory() {
         conversationHistory.clear()
     }
 
-    suspend fun chat(userMessage: String): ChatResult = withContext(Dispatchers.IO) {
+    /**
+     * Get all tool definitions (for ToolRegistry to embed).
+     */
+    fun getAllToolDefinitions(): JSONArray = allTools
+
+    /**
+     * Chat with optional filtered tool list.
+     * @param relevantTools If provided, only these tools are sent to the LLM.
+     *                      If null, all tools are sent.
+     */
+    suspend fun chat(userMessage: String, relevantTools: JSONArray? = null): ChatResult = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.MISTRAL_API_KEY
         if (apiKey.isBlank()) {
             return@withContext ChatResult(
@@ -110,6 +126,8 @@ Today's date is provided in the conversation — use it to calculate correct dat
                 emptyList()
             )
         }
+
+        currentTools = relevantTools
 
         conversationHistory.add(JSONObject().apply {
             put("role", "user")
@@ -121,6 +139,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
 
     /**
      * Send tool results back to Mistral and get the next response.
+     * Uses all tools for follow-up calls since the LLM might need different tools.
      */
     suspend fun sendToolResults(toolResults: List<Pair<String, String>>): ChatResult =
         withContext(Dispatchers.IO) {
@@ -131,6 +150,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
                     put("content", result)
                 })
             }
+            currentTools = null // Use all tools for follow-up
             makeRequest()
         }
 
@@ -162,7 +182,7 @@ Today's date is provided in the conversation — use it to calculate correct dat
             put("messages", messages)
             put("temperature", 0.7)
             put("max_tokens", 512)
-            put("tools", tools)
+            put("tools", currentTools ?: allTools)
             put("tool_choice", "auto")
         }
 
@@ -1014,6 +1034,27 @@ Today's date is provided in the conversation — use it to calculate correct dat
                         })
                     })
                     put("required", JSONArray().apply { put("prompt"); put("options"); put("button_styles") })
+                })
+            })
+        })
+
+        return tools
+
+        // --- Knowledge Graph ---
+        tools.put(JSONObject().apply {
+            put("type", "function")
+            put("function", JSONObject().apply {
+                put("name", "query_knowledge_graph")
+                put("description", "Query the on-device knowledge graph to find entities and relationships related to a topic. Use this to look up connections between things the user has told you about (e.g. 'what do you know about my family', 'what are my hobbies').")
+                put("parameters", JSONObject().apply {
+                    put("type", "object")
+                    put("properties", JSONObject().apply {
+                        put("topic", JSONObject().apply {
+                            put("type", "string")
+                            put("description", "The topic or entity to search for in the knowledge graph")
+                        })
+                    })
+                    put("required", JSONArray().apply { put("topic") })
                 })
             })
         })

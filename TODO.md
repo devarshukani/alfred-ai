@@ -62,6 +62,39 @@
 
 ---
 
+## Phase 6 — Vector Memory, Knowledge Graph & Smart Tool Routing 🚧
+
+### ObjectBox Vector Database
+- [x] **Add ObjectBox dependency** — ObjectBox 4.0+ with HNSW vector index support for on-device vector search
+- [x] **Entity models** — MemoryEntity (facts/preferences with embeddings), KnowledgeNode (knowledge graph nodes), KnowledgeEdge (relationships), ToolEntity (tool definitions with embeddings)
+- [x] **ObjectBox initialization** — MyObjectBox store setup in Application/Activity
+
+### On-Device Embedding
+- [x] **Embedding model** — Use all-MiniLM-L6-v2 ONNX model (~22MB) for 384-dimensional text embeddings, runs on-device via ONNX Runtime (already bundled with Sherpa)
+- [x] **EmbeddingModel class** — Tokenizer + ONNX inference pipeline, mean pooling + L2 normalization, produces FloatArray(384)
+- [x] **Lazy initialization** — Model loads on first use, cached for subsequent calls
+
+### Vector-Powered Memory (replaces SharedPreferences MemoryStore)
+- [x] **Semantic memory storage** — Facts and preferences stored as ObjectBox entities with vector embeddings
+- [x] **Semantic recall** — When recalling, embed the query and do nearest-neighbor search instead of exact key match
+- [x] **Memory context injection** — Top-K relevant memories injected into system prompt based on user query similarity
+- [x] **Migration** — Import existing SharedPreferences data into ObjectBox on first run
+
+### On-Device Knowledge Graph
+- [x] **KnowledgeNode entity** — Nodes with label, type (person/place/thing/concept/event), metadata, and embedding vector
+- [x] **KnowledgeEdge entity** — Directed edges with relationship type (e.g. "lives_in", "likes", "works_at"), source/target node IDs
+- [x] **Auto-extraction** — When user tells Alfred facts, extract entities and relationships into the graph
+- [x] **Graph-aware recall** — When querying memory, also traverse related nodes for richer context
+- [x] **Graph query tools** — LLM tools to query the knowledge graph (find related entities, get relationships)
+
+### Smart Tool Routing (Embedding-Based Tool Selection)
+- [x] **Tool embedding storage** — Each tool's name + description embedded and stored in ObjectBox at startup
+- [x] **Query-based tool filtering** — Before sending to LLM, embed user prompt and find top-K most relevant tools via vector search
+- [x] **Dynamic tool list** — Only send relevant tools (e.g. 5-8 instead of 30+) to Mistral, reducing token usage and improving accuracy
+- [x] **Always-include tools** — Some tools (present_options, memory tools) always included regardless of similarity score
+
+---
+
 ## Code Structure
 ```
 app/src/main/java/com/alfredassistant/alfred_ai/
@@ -69,6 +102,13 @@ app/src/main/java/com/alfredassistant/alfred_ai/
 ├── assistant/
 │   ├── AlfredBrain.kt                # Orchestrator — routes to Mistral + function calls
 │   └── MistralClient.kt             # Mistral API client (chat + function calling)
+├── db/
+│   ├── ObjectBoxStore.kt            # ObjectBox initialization + store singleton
+│   ├── MemoryEntity.kt              # Vector-enabled memory entity
+│   ├── KnowledgeNode.kt             # Knowledge graph node entity
+│   └── KnowledgeEdge.kt             # Knowledge graph edge entity
+├── embedding/
+│   └── EmbeddingModel.kt            # On-device ONNX embedding (all-MiniLM-L6-v2)
 ├── features/
 │   ├── phone/PhoneAction.kt
 │   ├── alarm/AlarmAction.kt
@@ -80,7 +120,10 @@ app/src/main/java/com/alfredassistant/alfred_ai/
 │   ├── weather/WeatherAction.kt
 │   ├── payments/PaymentAction.kt
 │   ├── notifications/NotificationAction.kt
-│   └── memory/MemoryStore.kt
+│   └── memory/
+│       ├── MemoryStore.kt            # Rewritten — ObjectBox + vector search
+│       ├── KnowledgeGraph.kt         # On-device knowledge graph operations
+│       └── ToolRegistry.kt           # Embedding-based tool selection
 ├── speech/
 │   └── SpeechHelper.kt               # STT + TTS
 └── ui/

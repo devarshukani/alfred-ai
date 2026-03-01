@@ -15,12 +15,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alfredassistant.alfred_ai.BuildConfig
+import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 
 @Composable
 fun WaveAssistantScreen(
     state: AssistantState,
     audioLevel: Float,
     confirmation: ConfirmationRequest?,
+    brain: AlfredBrain?,
     onMicTap: () -> Unit,
     onOptionSelected: (String) -> Unit,
     onDismiss: () -> Unit,
@@ -29,6 +31,25 @@ fun WaveAssistantScreen(
     // Debug overrides
     var debugState by remember { mutableStateOf<AssistantState?>(null) }
     var debugConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
+    var showInspector by remember { mutableStateOf(false) }
+
+    // Debug data — refreshed when inspector is shown or state changes
+    var debugMemories by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var debugNodes by remember { mutableStateOf<List<Triple<Long, String, String>>>(emptyList()) }
+    var debugEdges by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
+    var debugSelectedTools by remember { mutableStateOf<List<String>>(emptyList()) }
+    var debugExecutedTools by remember { mutableStateOf<List<String>>(emptyList()) }
+
+    // Refresh debug data when inspector is visible or state changes
+    LaunchedEffect(showInspector, state) {
+        if (showInspector && brain != null) {
+            debugMemories = brain.getDebugMemories()
+            debugNodes = brain.getDebugGraphNodes()
+            debugEdges = brain.getDebugGraphEdges()
+            debugSelectedTools = brain.lastSelectedTools
+            debugExecutedTools = brain.lastExecutedTools
+        }
+    }
 
     val activeState = debugState ?: state
     val activeConfirmation = debugConfirmation ?: confirmation
@@ -72,6 +93,18 @@ fun WaveAssistantScreen(
 
         // Debug buttons — top right, only in debug builds
         if (BuildConfig.DEBUG) {
+            // Debug inspector overlay
+            DebugInspectorScreen(
+                visible = showInspector,
+                memories = debugMemories,
+                graphNodes = debugNodes,
+                graphEdges = debugEdges,
+                selectedTools = debugSelectedTools,
+                executedTools = debugExecutedTools,
+                onDismiss = { showInspector = false },
+                modifier = Modifier.fillMaxSize()
+            )
+
             DebugPanel(
                 onStateChange = { debugState = it },
                 onShowConfirmation = {
@@ -87,6 +120,18 @@ fun WaveAssistantScreen(
                         buttonStyles = listOf("primary", "primary", "primary", "cancel")
                     )
                 },
+                onToggleInspector = {
+                    showInspector = !showInspector
+                    // Refresh data when opening
+                    if (showInspector && brain != null) {
+                        debugMemories = brain.getDebugMemories()
+                        debugNodes = brain.getDebugGraphNodes()
+                        debugEdges = brain.getDebugGraphEdges()
+                        debugSelectedTools = brain.lastSelectedTools
+                        debugExecutedTools = brain.lastExecutedTools
+                    }
+                },
+                inspectorOpen = showInspector,
                 onReset = {
                     debugState = null
                     debugConfirmation = null
@@ -104,6 +149,8 @@ fun WaveAssistantScreen(
 private fun DebugPanel(
     onStateChange: (AssistantState) -> Unit,
     onShowConfirmation: () -> Unit,
+    onToggleInspector: () -> Unit,
+    inspectorOpen: Boolean,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -113,6 +160,10 @@ private fun DebugPanel(
         modifier = modifier
     ) {
         DebugChip("Reset", Color(0xFFFF6B6B)) { onReset() }
+        DebugChip(
+            if (inspectorOpen) "Close" else "Inspect",
+            if (inspectorOpen) Color(0xFF5CD07E) else Color(0xFF4DD8E8)
+        ) { onToggleInspector() }
         DebugChip("Idle", Color(0xFF5B9BFF)) { onStateChange(AssistantState.IDLE) }
         DebugChip("Listen", Color(0xFF5CD07E)) { onStateChange(AssistantState.LISTENING) }
         DebugChip("Process", Color(0xFFA78BFA)) { onStateChange(AssistantState.PROCESSING) }
