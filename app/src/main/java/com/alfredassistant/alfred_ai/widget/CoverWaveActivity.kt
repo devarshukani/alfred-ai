@@ -2,6 +2,7 @@ package com.alfredassistant.alfred_ai.widget
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
@@ -15,18 +16,12 @@ import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.models.ModelDownloader
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
-import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
 import com.alfredassistant.alfred_ai.ui.RichCard
 import com.alfredassistant.alfred_ai.ui.theme.AlfredaiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-/**
- * Full-screen Alfred experience on the Flex Window cover screen.
- * Launches directly into listening mode with the animated wave filling the entire screen.
- * Confirmation dialogs are shown on the cover screen itself.
- */
 class CoverWaveActivity : ComponentActivity() {
 
     private lateinit var speechHelper: SpeechHelper
@@ -52,23 +47,25 @@ class CoverWaveActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // When returning from a redirected app (e.g. phone call ended),
-        // resume listening on the cover screen
         if (::speechHelper.isInitialized) {
-            android.os.Handler(mainLooper).postDelayed({
-                speechHelper.startListening()
-            }, 500)
+            android.os.Handler(mainLooper).postDelayed({ speechHelper.startListening() }, 500)
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        )
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
 
         ObjectBoxStore.init(this)
 
@@ -84,42 +81,32 @@ class CoverWaveActivity : ComponentActivity() {
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { permissions ->
-            val micGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
-            if (!micGranted) {
+            if (permissions[Manifest.permission.RECORD_AUDIO] != true) {
                 Toast.makeText(this, "Microphone permission is required", Toast.LENGTH_SHORT).show()
                 finish()
             }
         }
 
-        val needed = mutableListOf<String>()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) needed.add(Manifest.permission.RECORD_AUDIO)
-        if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray())
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+        }
 
         setContent {
             AlfredaiTheme {
                 var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-                var confirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
                 var richCard by remember { mutableStateOf<RichCard?>(null) }
                 var audioLevel by remember { mutableFloatStateOf(0f) }
 
                 LaunchedEffect(Unit) {
-                    brain.onConfirmationNeeded = { request ->
-                        runOnUiThread {
-                            confirmation = request
-                            assistantState = AssistantState.AWAITING_CONFIRMATION
-                            speechHelper.speak(request.spokenPrompt)
-                        }
-                    }
                     brain.onDisplayCard = { card ->
                         runOnUiThread {
                             richCard = card
                             assistantState = AssistantState.DISPLAYING_CARD
-                            // Speak summary only when waiting for user action (tool is blocking).
-                            // Otherwise the brain's final text response handles TTS.
-                            if (brain.isAwaitingCardAction && card.spokenSummary.isNotBlank()) {
-                                speechHelper.speak(card.spokenSummary)
+                            if (brain.isAwaitingCardAction) {
+                                speechHelper.stopListening()
+                                if (card.spokenSummary.isNotBlank()) {
+                                    speechHelper.speak(card.spokenSummary)
+                                }
                             }
                         }
                     }
@@ -130,41 +117,26 @@ class CoverWaveActivity : ComponentActivity() {
                         context = this@CoverWaveActivity,
                         onListeningStarted = { assistantState = AssistantState.LISTENING },
                         onResult = { text ->
-                            if (brain.isAwaitingSelection) {
-                                speechHelper.stopGracefully()
-                                confirmation = null
-                                assistantState = AssistantState.PROCESSING
-                                brain.submitOptionSelection(text)
-                            } else {
-                                // Clear any visible card when user starts a new query
-                                richCard = null
-                                assistantState = AssistantState.PROCESSING
-                                scope.launch {
-                                    val response = brain.processInput(text)
-                                    // On cover screen: never finish after redirect (e.g. call).
-                                    // Just speak the response and resume listening.
-                                    speechHelper.speak(response)
-                                }
+                            richCard = null
+                            assistantState = AssistantState.PROCESSING
+                            scope.launch {
+                                val response = brain.processInput(text)
+                                speechHelper.speak(response)
                             }
                         },
                         onSpeakingStarted = {
                             runOnUiThread {
-                                if (assistantState != AssistantState.AWAITING_CONFIRMATION &&
-                                    assistantState != AssistantState.DISPLAYING_CARD) {
+                                if (assistantState != AssistantState.DISPLAYING_CARD) {
                                     assistantState = AssistantState.SPEAKING
                                 }
                             }
                         },
                         onSpeakingDone = {
                             runOnUiThread {
-                                if (brain.isAwaitingSelection) {
-                                    assistantState = AssistantState.AWAITING_CONFIRMATION
-                                    speechHelper.startListening()
-                                } else if (brain.isAwaitingCardAction) {
+                                if (brain.isAwaitingCardAction) {
                                     assistantState = AssistantState.DISPLAYING_CARD
-                                    speechHelper.startListening()
+                                    // Don't start listening — user needs to interact with the card
                                 } else if (richCard != null) {
-                                    // Card is showing — keep it visible
                                     assistantState = AssistantState.DISPLAYING_CARD
                                     speechHelper.startListening()
                                 } else {
@@ -178,15 +150,11 @@ class CoverWaveActivity : ComponentActivity() {
                     )
                     speechHelper.init()
 
-                    // Start listening immediately
                     if (ContextCompat.checkSelfPermission(
-                            this@CoverWaveActivity,
-                            Manifest.permission.RECORD_AUDIO
+                            this@CoverWaveActivity, Manifest.permission.RECORD_AUDIO
                         ) == PackageManager.PERMISSION_GRANTED
                     ) {
-                        android.os.Handler(mainLooper).postDelayed({
-                            speechHelper.startListening()
-                        }, 300)
+                        android.os.Handler(mainLooper).postDelayed({ speechHelper.startListening() }, 300)
                     }
 
                     onDispose { speechHelper.shutdown() }
@@ -195,25 +163,24 @@ class CoverWaveActivity : ComponentActivity() {
                 CoverWaveScreen(
                     state = assistantState,
                     audioLevel = audioLevel,
-                    confirmation = confirmation,
                     richCard = richCard,
                     onMicTap = {
                         when (assistantState) {
                             AssistantState.LISTENING -> speechHelper.stopListening()
                             AssistantState.IDLE -> speechHelper.startListening()
-                            AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
-                            AssistantState.DISPLAYING_CARD -> speechHelper.startListening()
+                            AssistantState.DISPLAYING_CARD -> {
+                                if (!brain.isAwaitingCardAction) speechHelper.startListening()
+                            }
+                            AssistantState.SPEAKING -> {
+                                speechHelper.stopGracefully()
+                                assistantState = AssistantState.IDLE
+                                speechHelper.startListening()
+                            }
                             else -> {}
                         }
                     },
-                    onOptionSelected = { option ->
-                        speechHelper.stopGracefully()
-                        confirmation = null
-                        assistantState = AssistantState.PROCESSING
-                        brain.submitOptionSelection(option)
-                    },
                     onCardAction = { actionId ->
-                        if (actionId == "dismiss") {
+                        if (actionId.startsWith("dismiss")) {
                             richCard = null
                             assistantState = AssistantState.IDLE
                             brain.submitCardAction(actionId)
@@ -221,14 +188,11 @@ class CoverWaveActivity : ComponentActivity() {
                             val coords = actionId.removePrefix("directions:")
                             val parts = coords.split(",")
                             if (parts.size == 2) {
-                                val lat = parts[0].trim()
-                                val lon = parts[1].trim()
                                 try {
-                                    val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lon")
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                                    val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${parts[0].trim()},${parts[1].trim()}")
+                                    startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
                                         flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                                    }
-                                    startActivity(intent)
+                                    })
                                 } catch (_: Exception) {}
                             }
                         } else {

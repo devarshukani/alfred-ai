@@ -18,7 +18,6 @@ import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.models.ModelDownloader
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
-import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
 import com.alfredassistant.alfred_ai.ui.OnboardingScreen
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
 import com.alfredassistant.alfred_ai.ui.RichCard
@@ -43,9 +42,7 @@ class OverlayAssistActivity : ComponentActivity() {
     }
 
     override fun finish() {
-        if (::speechHelper.isInitialized) {
-            speechHelper.stopGracefully()
-        }
+        if (::speechHelper.isInitialized) speechHelper.stopGracefully()
         super.finish()
         @Suppress("DEPRECATION")
         overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
@@ -53,43 +50,32 @@ class OverlayAssistActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // App went off-screen (dismissed, home pressed, task-switched)
-        if (::speechHelper.isInitialized) {
-            speechHelper.stopGracefully()
-        }
+        if (::speechHelper.isInitialized) speechHelper.stopGracefully()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Enable real background blur on Android 12+ for frosted glass effect
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             window.setBackgroundBlurRadius(60)
-            window.attributes = window.attributes.also {
-                it.blurBehindRadius = 60
-            }
+            window.attributes = window.attributes.also { it.blurBehindRadius = 60 }
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
         }
 
-        // Initialize ObjectBox before anything that depends on it
         ObjectBoxStore.init(this)
 
         // Track granted permissions reactively for onboarding
-        val grantedPermissions = mutableStateOf(getCurrentGrantedPermissions())
+        brain = AlfredBrain(this)
 
+        val grantedPermissions = mutableStateOf(getCurrentGrantedPermissions())
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { results ->
-            // Refresh the full set so onboarding UI updates instantly
             grantedPermissions.value = getCurrentGrantedPermissions()
-
-            // If mic was explicitly denied during onboarding, just let the UI reflect it
             val micDenied = results.containsKey(Manifest.permission.RECORD_AUDIO)
                     && results[Manifest.permission.RECORD_AUDIO] == false
-            if (micDenied && !isOnboardingComplete()) {
-                // Don't finish — let user retry on the onboarding screen
-            }
+            if (micDenied && !isOnboardingComplete()) { /* let user retry */ }
         }
 
         val prefs = getSharedPreferences("alfred_onboarding", Context.MODE_PRIVATE)
@@ -106,26 +92,19 @@ class OverlayAssistActivity : ComponentActivity() {
 
                 AnimatedContent(
                     targetState = onboardingDone,
-                    transitionSpec = {
-                        fadeIn(tween(500)) togetherWith fadeOut(tween(300))
-                    },
+                    transitionSpec = { fadeIn(tween(500)) togetherWith fadeOut(tween(300)) },
                     label = "onboarding"
                 ) { done ->
                     if (!done) {
                         OnboardingScreen(
                             grantedPermissions = granted,
-                            onRequestPermissions = { perms ->
-                                permissionLauncher.launch(perms.toTypedArray())
-                            },
+                            onRequestPermissions = { perms -> permissionLauncher.launch(perms.toTypedArray()) },
                             onFinish = {
                                 prefs.edit().putBoolean("onboarding_complete", true).apply()
                                 onboardingDone = true
-                                // Request any remaining permissions the user skipped
                                 val remaining = getAllRequiredPermissions()
                                     .filter { ContextCompat.checkSelfPermission(this@OverlayAssistActivity, it) != PackageManager.PERMISSION_GRANTED }
-                                if (remaining.isNotEmpty()) {
-                                    permissionLauncher.launch(remaining.toTypedArray())
-                                }
+                                if (remaining.isNotEmpty()) permissionLauncher.launch(remaining.toTypedArray())
                             }
                         )
                     } else {
@@ -136,20 +115,17 @@ class OverlayAssistActivity : ComponentActivity() {
         }
     }
 
-    private fun isOnboardingComplete(): Boolean {
-        return getSharedPreferences("alfred_onboarding", Context.MODE_PRIVATE)
+    private fun isOnboardingComplete(): Boolean =
+        getSharedPreferences("alfred_onboarding", Context.MODE_PRIVATE)
             .getBoolean("onboarding_complete", false)
-    }
 
     private fun getCurrentGrantedPermissions(): Set<String> {
         val all = onboardingSteps.flatMap { it.permissions }.toSet()
-        return all.filter {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }.toSet()
+        return all.filter { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }.toSet()
     }
 
     private fun getAllRequiredPermissions(): List<String> {
-        return listOf(
+        val base = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.CALL_PHONE,
@@ -158,31 +134,32 @@ class OverlayAssistActivity : ComponentActivity() {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.SEND_SMS
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            base.add(Manifest.permission.READ_MEDIA_IMAGES)
+            base.add(Manifest.permission.READ_MEDIA_VIDEO)
+            base.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else {
+            base.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        return base
     }
 
     @Composable
     private fun AssistantContent(brain: AlfredBrain) {
         var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
-        var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
         var currentRichCard by remember { mutableStateOf<RichCard?>(null) }
         var audioLevel by remember { mutableFloatStateOf(0f) }
 
         LaunchedEffect(Unit) {
-            brain.onConfirmationNeeded = { request ->
-                runOnUiThread {
-                    currentConfirmation = request
-                    assistantState = AssistantState.AWAITING_CONFIRMATION
-                    speechHelper.speak(request.spokenPrompt)
-                }
-            }
             brain.onDisplayCard = { card ->
                 runOnUiThread {
                     currentRichCard = card
                     assistantState = AssistantState.DISPLAYING_CARD
-                    // Speak summary only when waiting for user action (tool is blocking).
-                    // Otherwise the brain's final text response handles TTS.
-                    if (brain.isAwaitingCardAction && card.spokenSummary.isNotBlank()) {
-                        speechHelper.speak(card.spokenSummary)
+                    if (brain.isAwaitingCardAction) {
+                        speechHelper.stopListening()
+                        if (card.spokenSummary.isNotBlank()) {
+                            speechHelper.speak(card.spokenSummary)
+                        }
                     }
                 }
             }
@@ -191,47 +168,29 @@ class OverlayAssistActivity : ComponentActivity() {
         DisposableEffect(Unit) {
             speechHelper = SpeechHelper(
                 context = this@OverlayAssistActivity,
-                onListeningStarted = {
-                    assistantState = AssistantState.LISTENING
-                },
+                onListeningStarted = { assistantState = AssistantState.LISTENING },
                 onResult = { text ->
-                    if (brain.isAwaitingSelection) {
-                        speechHelper.stopGracefully()
-                        currentConfirmation = null
-                        assistantState = AssistantState.PROCESSING
-                        brain.submitOptionSelection(text)
-                    } else {
-                        // Clear any visible card when user starts a new query
-                        currentRichCard = null
-                        assistantState = AssistantState.PROCESSING
-                        scope.launch {
-                            val response = brain.processInput(text)
-                            if (brain.didRedirect) {
-                                finish()
-                            } else {
-                                speechHelper.speak(response)
-                            }
-                        }
+                    currentRichCard = null
+                    assistantState = AssistantState.PROCESSING
+                    scope.launch {
+                        val response = brain.processInput(text)
+                        if (brain.didRedirect) finish()
+                        else speechHelper.speak(response)
                     }
                 },
                 onSpeakingStarted = {
                     runOnUiThread {
-                        if (assistantState != AssistantState.AWAITING_CONFIRMATION &&
-                            assistantState != AssistantState.DISPLAYING_CARD) {
+                        if (assistantState != AssistantState.DISPLAYING_CARD) {
                             assistantState = AssistantState.SPEAKING
                         }
                     }
                 },
                 onSpeakingDone = {
                     runOnUiThread {
-                        if (brain.isAwaitingSelection) {
-                            assistantState = AssistantState.AWAITING_CONFIRMATION
-                            speechHelper.startListening()
-                        } else if (brain.isAwaitingCardAction) {
+                        if (brain.isAwaitingCardAction) {
                             assistantState = AssistantState.DISPLAYING_CARD
-                            speechHelper.startListening()
+                            // Don't start listening — user needs to interact with the card
                         } else if (currentRichCard != null) {
-                            // Card is showing but not waiting for action — keep it visible
                             assistantState = AssistantState.DISPLAYING_CARD
                             speechHelper.startListening()
                         } else {
@@ -240,69 +199,55 @@ class OverlayAssistActivity : ComponentActivity() {
                         }
                     }
                 },
-                onError = {
-                    runOnUiThread { assistantState = AssistantState.IDLE }
-                },
-                onAudioLevel = { level ->
-                    audioLevel = level
-                }
+                onError = { runOnUiThread { assistantState = AssistantState.IDLE } },
+                onAudioLevel = { level -> audioLevel = level }
             )
             speechHelper.init()
 
             if (ContextCompat.checkSelfPermission(
-                    this@OverlayAssistActivity,
-                    Manifest.permission.RECORD_AUDIO
+                    this@OverlayAssistActivity, Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                android.os.Handler(mainLooper).postDelayed({
-                    speechHelper.startListening()
-                }, 300)
+                android.os.Handler(mainLooper).postDelayed({ speechHelper.startListening() }, 300)
             }
 
-            onDispose {
-                speechHelper.shutdown()
-            }
+            onDispose { speechHelper.shutdown() }
         }
 
         OverlayAssistantScreen(
             state = assistantState,
             audioLevel = audioLevel,
-            confirmation = currentConfirmation,
             richCard = currentRichCard,
             brain = brain,
             onMicTap = {
                 when (assistantState) {
                     AssistantState.LISTENING -> speechHelper.stopListening()
                     AssistantState.IDLE -> speechHelper.startListening()
-                    AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
-                    AssistantState.DISPLAYING_CARD -> speechHelper.startListening()
+                    AssistantState.DISPLAYING_CARD -> {
+                        if (!brain.isAwaitingCardAction) speechHelper.startListening()
+                    }
+                    AssistantState.SPEAKING -> {
+                        speechHelper.stopGracefully()
+                        assistantState = AssistantState.IDLE
+                        speechHelper.startListening()
+                    }
                     else -> {}
                 }
             },
-            onOptionSelected = { selectedOption ->
-                speechHelper.stopGracefully()
-                currentConfirmation = null
-                assistantState = AssistantState.PROCESSING
-                brain.submitOptionSelection(selectedOption)
-            },
             onCardAction = { actionId ->
-                if (actionId == "dismiss") {
+                if (actionId.startsWith("dismiss")) {
                     currentRichCard = null
                     assistantState = AssistantState.IDLE
                     brain.submitCardAction(actionId)
                 } else if (actionId.startsWith("directions:")) {
-                    // Open maps directly for directions actions
                     val coords = actionId.removePrefix("directions:")
                     val parts = coords.split(",")
                     if (parts.size == 2) {
-                        val lat = parts[0].trim()
-                        val lon = parts[1].trim()
                         try {
-                            val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lon")
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                            val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${parts[0].trim()},${parts[1].trim()}")
+                            startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
                                 flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                            }
-                            startActivity(intent)
+                            })
                         } catch (_: Exception) {}
                     }
                 } else {

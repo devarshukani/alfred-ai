@@ -21,21 +21,16 @@ import com.alfredassistant.alfred_ai.assistant.AlfredBrain
 fun WaveAssistantScreen(
     state: AssistantState,
     audioLevel: Float,
-    confirmation: ConfirmationRequest?,
     richCard: RichCard?,
     brain: AlfredBrain?,
     onMicTap: () -> Unit,
-    onOptionSelected: (String) -> Unit,
     onCardAction: (String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Debug overrides
     var debugState by remember { mutableStateOf<AssistantState?>(null) }
-    var debugConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
     var showInspector by remember { mutableStateOf(false) }
 
-    // Debug data — refreshed when inspector is shown or state changes
     var debugMemories by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
     var debugNodes by remember { mutableStateOf<List<Triple<Long, String, String>>>(emptyList()) }
     var debugEdges by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
@@ -43,7 +38,6 @@ fun WaveAssistantScreen(
     var debugExecutedTools by remember { mutableStateOf<List<String>>(emptyList()) }
     var debugSelectedSkills by remember { mutableStateOf<List<com.alfredassistant.alfred_ai.skills.SelectedSkillInfo>>(emptyList()) }
 
-    // Refresh debug data when inspector is visible or state changes
     LaunchedEffect(showInspector, state) {
         if (showInspector && brain != null) {
             debugMemories = brain.getDebugMemories()
@@ -56,7 +50,6 @@ fun WaveAssistantScreen(
     }
 
     val activeState = debugState ?: state
-    val activeConfirmation = debugConfirmation ?: confirmation
 
     Box(
         modifier = modifier
@@ -65,16 +58,12 @@ fun WaveAssistantScreen(
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }
-            ) {
-                if (activeState == AssistantState.IDLE) onDismiss()
-            }
+            ) { if (activeState == AssistantState.IDLE) onDismiss() }
     ) {
-        // Main content at bottom
         Box(
             contentAlignment = Alignment.BottomCenter,
             modifier = Modifier.fillMaxSize()
         ) {
-            // Wave bar at the very bottom (renders first = behind)
             AlfredWaveBar(
                 state = activeState,
                 audioLevel = audioLevel,
@@ -82,37 +71,27 @@ fun WaveAssistantScreen(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
 
-            // Confirmation box above the wave bar (renders second = in front)
-            ConfirmationBox(
-                confirmation = activeConfirmation,
-                onOptionSelected = { option ->
-                    if (debugConfirmation != null) {
-                        debugConfirmation = null
-                        debugState = null
-                    } else {
-                        onOptionSelected(option)
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 140.dp)
-            )
-
-            // Rich card above the wave bar
+            val textFieldValues = remember { mutableMapOf<String, String>() }
             RichCardBox(
                 richCard = richCard,
-                onAction = onCardAction,
+                onAction = { actionId ->
+                    if (textFieldValues.isNotEmpty()) {
+                        val params = textFieldValues.entries.joinToString("&") { "${it.key}=${it.value}" }
+                        textFieldValues.clear()
+                        onCardAction("$actionId?$params")
+                    } else {
+                        onCardAction(actionId)
+                    }
+                },
                 onToggle = { _, _ -> },
-                onTextInput = { _, _ -> },
+                onTextInput = { key, value -> textFieldValues[key] = value },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 140.dp)
             )
         }
 
-        // Debug buttons — top right, only in debug builds
         if (BuildConfig.DEBUG) {
-            // Debug inspector overlay
             DebugInspectorScreen(
                 visible = showInspector,
                 memories = debugMemories,
@@ -127,22 +106,8 @@ fun WaveAssistantScreen(
 
             DebugPanel(
                 onStateChange = { debugState = it },
-                onShowConfirmation = {
-                    debugState = AssistantState.AWAITING_CONFIRMATION
-                    debugConfirmation = ConfirmationRequest(
-                        prompt = "I found three contacts for \"mom\". Which one should I call?\n\n1. Mom — +919428067211\n2. Rehanatik Shaikh Mom — +918829209160\n3. Sukhmeet Bawa Mom — +919971435042",
-                        options = listOf(
-                            "Call Mom",
-                            "Rehanatik Shaikh",
-                            "Sukhmeet Bawa",
-                            "Cancel"
-                        ),
-                        buttonStyles = listOf("primary", "primary", "primary", "cancel")
-                    )
-                },
                 onToggleInspector = {
                     showInspector = !showInspector
-                    // Refresh data when opening
                     if (showInspector && brain != null) {
                         debugMemories = brain.getDebugMemories()
                         debugNodes = brain.getDebugGraphNodes()
@@ -153,10 +118,7 @@ fun WaveAssistantScreen(
                     }
                 },
                 inspectorOpen = showInspector,
-                onReset = {
-                    debugState = null
-                    debugConfirmation = null
-                },
+                onReset = { debugState = null },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
@@ -169,7 +131,6 @@ fun WaveAssistantScreen(
 @Composable
 private fun DebugPanel(
     onStateChange: (AssistantState) -> Unit,
-    onShowConfirmation: () -> Unit,
     onToggleInspector: () -> Unit,
     inspectorOpen: Boolean,
     onReset: () -> Unit,
@@ -189,16 +150,12 @@ private fun DebugPanel(
         DebugChip("Listen", Color(0xFF5CD07E)) { onStateChange(AssistantState.LISTENING) }
         DebugChip("Process", Color(0xFFA78BFA)) { onStateChange(AssistantState.PROCESSING) }
         DebugChip("Speak", Color(0xFFFFAB5E)) { onStateChange(AssistantState.SPEAKING) }
-        DebugChip("Confirm", Color(0xFFFFD166)) { onShowConfirmation() }
+        DebugChip("Card", Color(0xFFFFD166)) { onStateChange(AssistantState.DISPLAYING_CARD) }
     }
 }
 
 @Composable
-private fun DebugChip(
-    label: String,
-    color: Color,
-    onClick: () -> Unit
-) {
+private fun DebugChip(label: String, color: Color, onClick: () -> Unit) {
     Text(
         text = label,
         color = color,
