@@ -58,6 +58,30 @@
             </intent-filter>
         </service>
 
+        <!-- Cover Screen Wave Activity (Flex Window) -->
+        <activity
+            android:name=".widget.CoverWaveActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Alfredai.CoverWave"
+            android:showOnLockScreen="true"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+
+        <!-- Flex Window Cover Widget -->
+        <receiver
+            android:name=".widget.AlfredCoverWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/meta_info_cover_wave_widget" />
+            <meta-data
+                android:name="com.samsung.android.appwidget.provider"
+                android:resource="@xml/samsung_meta_info_cover_wave_widget" />
+        </receiver>
+
     </application>
 
 </manifest>

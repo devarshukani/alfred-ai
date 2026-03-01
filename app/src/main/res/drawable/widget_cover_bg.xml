@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base dark background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FF0C0C10" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    <!-- Gradient overlay to hint at the wave colors -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="200dp"
+                android:centerX="0.5"
+                android:centerY="0.5"
+                android:startColor="#405B9BFF"
+                android:endColor="#00000000" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    <!-- Secondary glow -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="160dp"
+                android:centerX="0.3"
+                android:centerY="0.7"
+                android:startColor="#30F472B6"
+                android:endColor="#00000000" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    <!-- Third glow -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="140dp"
+                android:centerX="0.7"
+                android:centerY="0.3"
+                android:startColor="#304DD8E8"
+                android:endColor="#00000000" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+</layer-list>
