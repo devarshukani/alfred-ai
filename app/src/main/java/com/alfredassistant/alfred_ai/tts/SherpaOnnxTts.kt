@@ -6,6 +6,7 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
+import com.alfredassistant.alfred_ai.models.ModelDownloader
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
@@ -16,8 +17,8 @@ import java.io.IOException
 
 private const val TAG = "SherpaOnnxTts"
 
-private const val MODEL_DIR = "models/tts"
-private const val DATA_DIR = "$MODEL_DIR/espeak-ng-data"
+private const val ASSET_DATA_DIR = "models/tts/espeak-ng-data"
+private const val ASSET_TOKENS_PATH = "models/tts/tokens.txt"
 
 object SherpaOnnxTts {
 
@@ -35,16 +36,29 @@ object SherpaOnnxTts {
         if (tts != null) return
         Log.i(TAG, "Initializing sherpa-onnx TTS")
 
-        val assets = context.assets
+        val ttsDir = ModelDownloader.getTtsDir(context)
+        val modelFile = File(ttsDir, "model.onnx")
+
+        if (!modelFile.exists()) {
+            Log.e(TAG, "TTS model.onnx not found in ${ttsDir.absolutePath}. Run model download first.")
+            return
+        }
 
         // espeak-ng-data must live on the real filesystem for native code
-        val externalDataDir = copyDataDir(context, DATA_DIR)
+        // These small files stay in APK assets and are copied once
+        val externalDataDir = copyDataDir(context, ASSET_DATA_DIR)
+
+        // tokens.txt also stays in assets — copy to external so sherpa can read it
+        val tokensFile = File(ttsDir, "tokens.txt")
+        if (!tokensFile.exists()) {
+            copyAssetFile(context, ASSET_TOKENS_PATH, tokensFile)
+        }
 
         val config = OfflineTtsConfig(
             model = OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(
-                    model = "$MODEL_DIR/model.onnx",
-                    tokens = "$MODEL_DIR/tokens.txt",
+                    model = modelFile.absolutePath,
+                    tokens = tokensFile.absolutePath,
                     dataDir = externalDataDir,
                 ),
                 numThreads = 2,
@@ -53,7 +67,7 @@ object SherpaOnnxTts {
             ),
         )
 
-        tts = OfflineTts(assetManager = assets, config = config)
+        tts = OfflineTts(config = config)
         Log.i(TAG, "TTS ready — sampleRate=${tts?.sampleRate()} speakers=${tts?.numSpeakers()}")
     }
 
@@ -183,7 +197,7 @@ object SherpaOnnxTts {
         tts = null
     }
 
-    // --- Asset copying (espeak-ng-data needs real filesystem paths) ---
+    // --- Asset copying (espeak-ng-data + tokens.txt from APK assets) ---
 
     private fun copyDataDir(context: Context, dataDir: String): String {
         copyAssets(context, dataDir)
@@ -194,7 +208,7 @@ object SherpaOnnxTts {
         try {
             val list = context.assets.list(path)
             if (list.isNullOrEmpty()) {
-                copyFile(context, path)
+                copyAssetToExternal(context, path)
             } else {
                 File("${context.getExternalFilesDir(null)}/$path").mkdirs()
                 for (item in list) {
@@ -206,7 +220,7 @@ object SherpaOnnxTts {
         }
     }
 
-    private fun copyFile(context: Context, filename: String) {
+    private fun copyAssetToExternal(context: Context, filename: String) {
         try {
             val dest = File("${context.getExternalFilesDir(null)}/$filename")
             if (dest.exists()) return
@@ -217,6 +231,19 @@ object SherpaOnnxTts {
             }
         } catch (ex: Exception) {
             Log.e(TAG, "Failed to copy $filename: $ex")
+        }
+    }
+
+    private fun copyAssetFile(context: Context, assetPath: String, dest: File) {
+        try {
+            dest.parentFile?.mkdirs()
+            context.assets.open(assetPath).use { input ->
+                FileOutputStream(dest).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        } catch (ex: Exception) {
+            Log.e(TAG, "Failed to copy asset $assetPath: $ex")
         }
     }
 }
