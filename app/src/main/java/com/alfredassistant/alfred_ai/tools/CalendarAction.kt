@@ -1,4 +1,4 @@
-package com.alfredassistant.alfred_ai.features.calendar
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.ContentUris
 import android.content.Context
@@ -8,6 +8,8 @@ import android.net.Uri
 import android.provider.CalendarContract
 import org.json.JSONArray
 import org.json.JSONObject
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -178,4 +180,29 @@ class CalendarAction(private val context: Context) {
             System.currentTimeMillis()
         }
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "create_calendar_event",
+            description = "Create a new calendar event. Opens the system calendar to confirm.",
+            parameters = listOf(
+                Param(name = "title", type = "string", description = "Event title"),
+                Param(name = "start_datetime", type = "string", description = "Start in YYYY-MM-DD HH:mm"),
+                Param(name = "end_datetime", type = "string", description = "End in YYYY-MM-DD HH:mm"),
+                Param(name = "description", type = "string", description = "Optional event description"),
+                Param(name = "location", type = "string", description = "Optional event location"),
+                Param(name = "all_day", type = "boolean", description = "All-day event. Default false.")
+            ),
+            required = listOf("title", "start_datetime", "end_datetime")
+        ) { args ->
+            val title = args.getString("title")
+            createEvent(title, parseDateTime(args.getString("start_datetime")), parseDateTime(args.getString("end_datetime")),
+                args.optString("description", null), args.optString("location", null), args.optBoolean("all_day", false))
+            "Event '$title' created."
+        },
+        ToolDef(name = "get_today_events", description = "Get all calendar events for today.") { _ -> getTodayEvents() },
+        ToolDef(name = "get_tomorrow_events", description = "Get all calendar events for tomorrow.") { _ -> getTomorrowEvents() },
+        ToolDef(name = "get_week_events", description = "Get all calendar events for the rest of this week.") { _ -> getWeekEvents() },
+        ToolDef(name = "open_calendar", description = "Open the calendar app.") { _ -> openCalendar(); "Calendar opened." }
+    )
 }

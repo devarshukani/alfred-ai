@@ -39,6 +39,7 @@ fun WaveAssistantScreen(
     var debugEdges by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
     var debugSelectedTools by remember { mutableStateOf<List<String>>(emptyList()) }
     var debugExecutedTools by remember { mutableStateOf<List<String>>(emptyList()) }
+    var debugSelectedSkills by remember { mutableStateOf<List<com.alfredassistant.alfred_ai.skills.SelectedSkillInfo>>(emptyList()) }
 
     // Refresh debug data when inspector is visible or state changes
     LaunchedEffect(showInspector, state) {
@@ -48,6 +49,7 @@ fun WaveAssistantScreen(
             debugEdges = brain.getDebugGraphEdges()
             debugSelectedTools = brain.lastSelectedTools
             debugExecutedTools = brain.lastExecutedTools
+            debugSelectedSkills = brain.lastSelectedSkills
         }
     }
 
@@ -105,6 +107,7 @@ fun WaveAssistantScreen(
                 graphEdges = debugEdges,
                 selectedTools = debugSelectedTools,
                 executedTools = debugExecutedTools,
+                selectedSkills = debugSelectedSkills,
                 onDismiss = { showInspector = false },
                 modifier = Modifier.fillMaxSize()
             )
@@ -133,6 +136,7 @@ fun WaveAssistantScreen(
                         debugEdges = brain.getDebugGraphEdges()
                         debugSelectedTools = brain.lastSelectedTools
                         debugExecutedTools = brain.lastExecutedTools
+                        debugSelectedSkills = brain.lastSelectedSkills
                     }
                 },
                 inspectorOpen = showInspector,
