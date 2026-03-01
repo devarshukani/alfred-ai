@@ -66,8 +66,6 @@ class OverlayAssistActivity : ComponentActivity() {
         ObjectBoxStore.init(this)
 
         // Track granted permissions reactively for onboarding
-        brain = AlfredBrain(this)
-
         val grantedPermissions = mutableStateOf(getCurrentGrantedPermissions())
         val permissionLauncher = registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
