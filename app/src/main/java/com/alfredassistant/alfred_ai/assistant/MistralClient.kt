@@ -26,7 +26,7 @@ class MistralClient {
 
     companion object {
         private const val BASE_URL = "https://api.mistral.ai/v1/chat/completions"
-        private const val MODEL = "ministral-3b-latest"
+        private const val MODEL = "mistral-large-latest"
         private const val SYSTEM_PROMPT = """You are Alfred, a friendly AI voice assistant with a powerful memory. Every response is read aloud by TTS.
 
 ABSOLUTE RULES:
