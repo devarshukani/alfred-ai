@@ -15,6 +15,7 @@ import com.alfredassistant.alfred_ai.db.ObjectBoxStore
 import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
+import com.alfredassistant.alfred_ai.ui.RichCard
 import com.alfredassistant.alfred_ai.ui.theme.AlfredaiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +85,7 @@ class CoverWaveActivity : ComponentActivity() {
             AlfredaiTheme {
                 var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
                 var confirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
+                var richCard by remember { mutableStateOf<RichCard?>(null) }
                 var audioLevel by remember { mutableFloatStateOf(0f) }
 
                 LaunchedEffect(Unit) {
@@ -92,6 +94,17 @@ class CoverWaveActivity : ComponentActivity() {
                             confirmation = request
                             assistantState = AssistantState.AWAITING_CONFIRMATION
                             speechHelper.speak(request.spokenPrompt)
+                        }
+                    }
+                    brain.onDisplayCard = { card ->
+                        runOnUiThread {
+                            richCard = card
+                            assistantState = AssistantState.DISPLAYING_CARD
+                            // Speak summary only when waiting for user action (tool is blocking).
+                            // Otherwise the brain's final text response handles TTS.
+                            if (brain.isAwaitingCardAction && card.spokenSummary.isNotBlank()) {
+                                speechHelper.speak(card.spokenSummary)
+                            }
                         }
                     }
                 }
@@ -107,6 +120,8 @@ class CoverWaveActivity : ComponentActivity() {
                                 assistantState = AssistantState.PROCESSING
                                 brain.submitOptionSelection(text)
                             } else {
+                                // Clear any visible card when user starts a new query
+                                richCard = null
                                 assistantState = AssistantState.PROCESSING
                                 scope.launch {
                                     val response = brain.processInput(text)
@@ -118,7 +133,8 @@ class CoverWaveActivity : ComponentActivity() {
                         },
                         onSpeakingStarted = {
                             runOnUiThread {
-                                if (assistantState != AssistantState.AWAITING_CONFIRMATION) {
+                                if (assistantState != AssistantState.AWAITING_CONFIRMATION &&
+                                    assistantState != AssistantState.DISPLAYING_CARD) {
                                     assistantState = AssistantState.SPEAKING
                                 }
                             }
@@ -127,6 +143,13 @@ class CoverWaveActivity : ComponentActivity() {
                             runOnUiThread {
                                 if (brain.isAwaitingSelection) {
                                     assistantState = AssistantState.AWAITING_CONFIRMATION
+                                    speechHelper.startListening()
+                                } else if (brain.isAwaitingCardAction) {
+                                    assistantState = AssistantState.DISPLAYING_CARD
+                                    speechHelper.startListening()
+                                } else if (richCard != null) {
+                                    // Card is showing — keep it visible
+                                    assistantState = AssistantState.DISPLAYING_CARD
                                     speechHelper.startListening()
                                 } else {
                                     assistantState = AssistantState.IDLE
@@ -157,11 +180,13 @@ class CoverWaveActivity : ComponentActivity() {
                     state = assistantState,
                     audioLevel = audioLevel,
                     confirmation = confirmation,
+                    richCard = richCard,
                     onMicTap = {
                         when (assistantState) {
                             AssistantState.LISTENING -> speechHelper.stopListening()
                             AssistantState.IDLE -> speechHelper.startListening()
                             AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
+                            AssistantState.DISPLAYING_CARD -> speechHelper.startListening()
                             else -> {}
                         }
                     },
@@ -170,6 +195,31 @@ class CoverWaveActivity : ComponentActivity() {
                         confirmation = null
                         assistantState = AssistantState.PROCESSING
                         brain.submitOptionSelection(option)
+                    },
+                    onCardAction = { actionId ->
+                        if (actionId == "dismiss") {
+                            richCard = null
+                            assistantState = AssistantState.IDLE
+                            brain.submitCardAction(actionId)
+                        } else if (actionId.startsWith("directions:")) {
+                            val coords = actionId.removePrefix("directions:")
+                            val parts = coords.split(",")
+                            if (parts.size == 2) {
+                                val lat = parts[0].trim()
+                                val lon = parts[1].trim()
+                                try {
+                                    val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lon")
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                        } else {
+                            richCard = null
+                            assistantState = AssistantState.PROCESSING
+                            brain.submitCardAction(actionId)
+                        }
                     },
                     onDismiss = { finish() }
                 )

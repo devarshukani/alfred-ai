@@ -86,6 +86,16 @@ Each skill provides tools. Only relevant skills are loaded per query, but Memory
 - Payments: upi_payment (use phone@upi as UPI ID), launch_payment_app, list_payment_apps.
 - Notifications: get_notifications, get_app_notifications, clear_notifications.
 
+VISUAL DISPLAY — show_card:
+You have a show_card tool that displays rich visual cards on screen. USE IT whenever data is better seen than heard:
+- Weather: show temperature, conditions, and forecast days as a card with icon_label rows and a carousel for each day.
+- Restaurants/places: show results as a carousel. For each item include: title (name), subtitle (cuisine), detail (address/hours), icon_text (food emoji), rating if known, action_id "directions:LAT,LON" with action_label "Directions" so user can tap to navigate.
+- Calendar events: show upcoming events as info_rows or a carousel with title, time, and location.
+- Search results: show structured results visually.
+- Any list of 3+ items: show as a carousel or info_rows instead of reading them all aloud.
+ALWAYS call show_card BEFORE your final text response. The spoken_summary should be a brief overview (1-2 sentences), NOT the full data — the card shows the details.
+Do NOT repeat all the data in your spoken response that is already visible on the card.
+
 Today's date is provided in the conversation."""
     }
 
@@ -210,7 +220,7 @@ Today's date is provided in the conversation."""
             put("model", MODEL)
             put("messages", messages)
             put("temperature", 0.7)
-            put("max_tokens", 512)
+            put("max_tokens", 2048)
             put("tools", currentTools ?: JSONArray())
             put("tool_choice", "auto")
         }
@@ -280,16 +290,34 @@ Today's date is provided in the conversation."""
                 if (message.has("tool_calls") && !message.isNull("tool_calls")) {
                     val calls = message.getJSONArray("tool_calls")
                     for (i in 0 until calls.length()) {
-                        val call = calls.getJSONObject(i)
-                        val fn = call.getJSONObject("function")
-                        toolCalls.add(
-                            ToolCall(
-                                id = call.getString("id"),
-                                functionName = fn.getString("name"),
-                                arguments = JSONObject(fn.getString("arguments"))
+                        try {
+                            val call = calls.getJSONObject(i)
+                            val fn = call.getJSONObject("function")
+                            toolCalls.add(
+                                ToolCall(
+                                    id = call.getString("id"),
+                                    functionName = fn.getString("name"),
+                                    arguments = JSONObject(fn.getString("arguments"))
+                                )
                             )
-                        )
+                        } catch (e: Exception) {
+                            // Truncated or malformed tool call JSON — skip it
+                            android.util.Log.w("MistralClient", "Skipping malformed tool call: ${e.message?.take(80)}")
+                        }
                     }
+                }
+
+                // If the response had tool_calls but all were malformed/truncated,
+                // remove the broken assistant message and return a retry-friendly response
+                val hadToolCalls = message.has("tool_calls") && !message.isNull("tool_calls")
+                    && message.getJSONArray("tool_calls").length() > 0
+                if (hadToolCalls && toolCalls.isEmpty()) {
+                    android.util.Log.w("MistralClient", "All tool calls were truncated/malformed — dropping broken message")
+                    conversationHistory.removeLastOrNull()
+                    return ChatResult(
+                        "Let me try that again.",
+                        emptyList()
+                    )
                 }
 
                 val content = if (message.has("content") && !message.isNull("content")) {
@@ -305,8 +333,9 @@ Today's date is provided in the conversation."""
 
                 return ChatResult(content, toolCalls)
             } catch (e: Exception) {
+                val safeMsg = e.message?.take(60)?.replace(Regex("[{\"\\[\\]]"), "") ?: "Unknown error"
                 return ChatResult(
-                    "Sorry, something went wrong. ${e.message ?: "Unknown error."}",
+                    "Sorry, something went wrong. Please try again.",
                     emptyList()
                 )
             }

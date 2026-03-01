@@ -20,6 +20,7 @@ import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
 import com.alfredassistant.alfred_ai.ui.OnboardingScreen
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
+import com.alfredassistant.alfred_ai.ui.RichCard
 import com.alfredassistant.alfred_ai.ui.onboardingSteps
 import com.alfredassistant.alfred_ai.ui.theme.AlfredaiTheme
 import kotlinx.coroutines.CoroutineScope
@@ -153,6 +154,7 @@ class OverlayAssistActivity : ComponentActivity() {
     private fun AssistantContent(brain: AlfredBrain) {
         var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
         var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
+        var currentRichCard by remember { mutableStateOf<RichCard?>(null) }
         var audioLevel by remember { mutableFloatStateOf(0f) }
 
         LaunchedEffect(Unit) {
@@ -161,6 +163,17 @@ class OverlayAssistActivity : ComponentActivity() {
                     currentConfirmation = request
                     assistantState = AssistantState.AWAITING_CONFIRMATION
                     speechHelper.speak(request.spokenPrompt)
+                }
+            }
+            brain.onDisplayCard = { card ->
+                runOnUiThread {
+                    currentRichCard = card
+                    assistantState = AssistantState.DISPLAYING_CARD
+                    // Speak summary only when waiting for user action (tool is blocking).
+                    // Otherwise the brain's final text response handles TTS.
+                    if (brain.isAwaitingCardAction && card.spokenSummary.isNotBlank()) {
+                        speechHelper.speak(card.spokenSummary)
+                    }
                 }
             }
         }
@@ -178,6 +191,8 @@ class OverlayAssistActivity : ComponentActivity() {
                         assistantState = AssistantState.PROCESSING
                         brain.submitOptionSelection(text)
                     } else {
+                        // Clear any visible card when user starts a new query
+                        currentRichCard = null
                         assistantState = AssistantState.PROCESSING
                         scope.launch {
                             val response = brain.processInput(text)
@@ -191,7 +206,8 @@ class OverlayAssistActivity : ComponentActivity() {
                 },
                 onSpeakingStarted = {
                     runOnUiThread {
-                        if (assistantState != AssistantState.AWAITING_CONFIRMATION) {
+                        if (assistantState != AssistantState.AWAITING_CONFIRMATION &&
+                            assistantState != AssistantState.DISPLAYING_CARD) {
                             assistantState = AssistantState.SPEAKING
                         }
                     }
@@ -200,6 +216,13 @@ class OverlayAssistActivity : ComponentActivity() {
                     runOnUiThread {
                         if (brain.isAwaitingSelection) {
                             assistantState = AssistantState.AWAITING_CONFIRMATION
+                            speechHelper.startListening()
+                        } else if (brain.isAwaitingCardAction) {
+                            assistantState = AssistantState.DISPLAYING_CARD
+                            speechHelper.startListening()
+                        } else if (currentRichCard != null) {
+                            // Card is showing but not waiting for action — keep it visible
+                            assistantState = AssistantState.DISPLAYING_CARD
                             speechHelper.startListening()
                         } else {
                             assistantState = AssistantState.IDLE
@@ -235,12 +258,14 @@ class OverlayAssistActivity : ComponentActivity() {
             state = assistantState,
             audioLevel = audioLevel,
             confirmation = currentConfirmation,
+            richCard = currentRichCard,
             brain = brain,
             onMicTap = {
                 when (assistantState) {
                     AssistantState.LISTENING -> speechHelper.stopListening()
                     AssistantState.IDLE -> speechHelper.startListening()
                     AssistantState.AWAITING_CONFIRMATION -> speechHelper.startListening()
+                    AssistantState.DISPLAYING_CARD -> speechHelper.startListening()
                     else -> {}
                 }
             },
@@ -249,6 +274,32 @@ class OverlayAssistActivity : ComponentActivity() {
                 currentConfirmation = null
                 assistantState = AssistantState.PROCESSING
                 brain.submitOptionSelection(selectedOption)
+            },
+            onCardAction = { actionId ->
+                if (actionId == "dismiss") {
+                    currentRichCard = null
+                    assistantState = AssistantState.IDLE
+                    brain.submitCardAction(actionId)
+                } else if (actionId.startsWith("directions:")) {
+                    // Open maps directly for directions actions
+                    val coords = actionId.removePrefix("directions:")
+                    val parts = coords.split(",")
+                    if (parts.size == 2) {
+                        val lat = parts[0].trim()
+                        val lon = parts[1].trim()
+                        try {
+                            val uri = android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$lat,$lon")
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                } else {
+                    currentRichCard = null
+                    assistantState = AssistantState.PROCESSING
+                    brain.submitCardAction(actionId)
+                }
             },
             onDismiss = { finish() }
         )
