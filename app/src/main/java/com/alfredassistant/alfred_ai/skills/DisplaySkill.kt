@@ -49,6 +49,8 @@ Available block types:
 - chip_row: {type:"chip_row", chips:["tag1","tag2"]}
 - progress_bar: {type:"progress_bar", progress:0.7, label:"..."}
 - rating: {type:"rating", stars:4.5, label:"..."}
+- line_chart: {type:"line_chart", points:[100.5, 102.3, ...], label:"1 Month", min_label:"Low: ₹480", max_label:"High: ₹520", color:"green|red|blue|gold"}
+- score_card: {type:"score_card", home_team:"Team A", away_team:"Team B", home_score:"3", away_score:"1", home_icon:"🏏", away_icon:"🏏", status:"LIVE|FT|2nd Innings", sport:"cricket|football", detail:"IPL 2026 • Match 12", home_extra:"142/3 (18.2 ov)", away_extra:"138/10 (19.4 ov)"}
 
 Use this whenever visual display helps the user understand information better.""",
             parameters = listOf(

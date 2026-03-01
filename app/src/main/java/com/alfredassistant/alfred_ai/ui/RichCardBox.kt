@@ -2,6 +2,7 @@ package com.alfredassistant.alfred_ai.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,7 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -145,6 +149,8 @@ private fun RenderBlock(
         is RichBlock.ChipRow -> ChipRowBlock(block.chips)
         is RichBlock.ProgressBar -> ProgressBarBlock(block.progress, block.label)
         is RichBlock.Rating -> RatingBlock(block.stars, block.label)
+        is RichBlock.LineChart -> LineChartBlock(block.points, block.label, block.minLabel, block.maxLabel, block.color)
+        is RichBlock.ScoreCard -> ScoreCardBlock(block)
     }
 }
 
@@ -553,6 +559,274 @@ private fun RatingBlock(stars: Float, label: String) {
         if (label.isNotBlank()) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(text = label, color = AlfredTextSecondary, fontSize = 13.sp)
+        }
+    }
+}
+
+
+@Composable
+private fun LineChartBlock(
+    points: List<Float>,
+    label: String,
+    minLabel: String,
+    maxLabel: String,
+    colorName: String
+) {
+    if (points.size < 2) return
+
+    val lineColor = when (colorName) {
+        "red" -> AlfredRed
+        "blue" -> AlfredGold
+        "gold" -> WaveYellow
+        else -> AlfredGreen
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        if (label.isNotBlank()) {
+            Text(
+                text = label,
+                color = AlfredTextSecondary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+
+        // Min/max labels row
+        if (maxLabel.isNotBlank() || minLabel.isNotBlank()) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+            ) {
+                Text(text = minLabel, color = AlfredTextDim, fontSize = 11.sp)
+                Text(text = maxLabel, color = AlfredTextDim, fontSize = 11.sp)
+            }
+        }
+
+        val minVal = points.min()
+        val maxVal = points.max()
+        val range = (maxVal - minVal).coerceAtLeast(0.01f)
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(120.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.03f))
+        ) {
+            val w = size.width
+            val h = size.height
+            val padTop = 8f
+            val padBottom = 8f
+            val chartH = h - padTop - padBottom
+
+            // Draw grid lines
+            for (i in 0..3) {
+                val y = padTop + chartH * (i / 3f)
+                drawLine(
+                    color = Color.White.copy(alpha = 0.05f),
+                    start = Offset(0f, y),
+                    end = Offset(w, y),
+                    strokeWidth = 1f
+                )
+            }
+
+            // Build path
+            val path = Path()
+            val stepX = w / (points.size - 1).toFloat()
+
+            points.forEachIndexed { i, value ->
+                val x = i * stepX
+                val y = padTop + chartH * (1f - (value - minVal) / range)
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+
+            // Draw line
+            drawPath(
+                path = path,
+                color = lineColor,
+                style = Stroke(width = 2.5f)
+            )
+
+            // Draw glow under the line (filled area)
+            val fillPath = Path().apply {
+                addPath(path)
+                lineTo(w, h)
+                lineTo(0f, h)
+                close()
+            }
+            drawPath(
+                path = fillPath,
+                color = lineColor.copy(alpha = 0.08f)
+            )
+
+            // Draw dot at last point
+            val lastX = (points.size - 1) * stepX
+            val lastY = padTop + chartH * (1f - (points.last() - minVal) / range)
+            drawCircle(
+                color = lineColor,
+                radius = 4f,
+                center = Offset(lastX, lastY)
+            )
+        }
+    }
+}
+
+
+@Composable
+private fun ScoreCardBlock(card: RichBlock.ScoreCard) {
+    val isLive = card.status.contains("LIVE", ignoreCase = true)
+    val statusColor = if (isLive) AlfredRed else AlfredTextDim
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clip(InnerCardShape)
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(0.5.dp, Color.White.copy(alpha = 0.08f), InnerCardShape)
+            .padding(vertical = 16.dp, horizontal = 12.dp)
+    ) {
+        // Detail line (tournament / match info)
+        if (card.detail.isNotBlank()) {
+            Text(
+                text = card.detail,
+                color = AlfredTextDim,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+            )
+        }
+
+        // Status badge
+        if (card.status.isNotBlank()) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .clip(PillShape)
+                    .background(statusColor.copy(alpha = 0.15f))
+                    .border(0.5.dp, statusColor.copy(alpha = 0.3f), PillShape)
+                    .padding(horizontal = 12.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = card.status.uppercase(),
+                    color = statusColor,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Versus row: Home — Score VS Score — Away
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Home team side
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (card.homeIcon.isNotBlank()) {
+                    Text(text = card.homeIcon, fontSize = 32.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Text(
+                    text = card.homeTeam,
+                    color = AlfredTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Scores in center
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = card.homeScore,
+                        color = AlfredTextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = " — ",
+                        color = AlfredTextDim,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                    Text(
+                        text = card.awayScore,
+                        color = AlfredTextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                // "VS" label below scores
+                Text(
+                    text = "VS",
+                    color = AlfredGold,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 2.sp,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            // Away team side
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (card.awayIcon.isNotBlank()) {
+                    Text(text = card.awayIcon, fontSize = 32.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
+                Text(
+                    text = card.awayTeam,
+                    color = AlfredTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        // Extra info rows (e.g. overs, innings detail)
+        if (card.homeExtra.isNotBlank() || card.awayExtra.isNotBlank()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = card.homeExtra,
+                    color = AlfredTextSecondary,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = card.awayExtra,
+                    color = AlfredTextSecondary,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }

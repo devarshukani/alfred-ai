@@ -45,6 +45,30 @@ object RichCardParser {
             }
             "progress_bar" -> RichBlock.ProgressBar(obj.getDouble("progress").toFloat(), obj.optString("label", ""))
             "rating" -> RichBlock.Rating(obj.getDouble("stars").toFloat(), obj.optString("label", ""))
+            "line_chart" -> {
+                val pointsArr = obj.getJSONArray("points")
+                val points = (0 until pointsArr.length()).map { pointsArr.getDouble(it).toFloat() }
+                RichBlock.LineChart(
+                    points = points,
+                    label = obj.optString("label", ""),
+                    minLabel = obj.optString("min_label", ""),
+                    maxLabel = obj.optString("max_label", ""),
+                    color = obj.optString("color", "green")
+                )
+            }
+            "score_card" -> RichBlock.ScoreCard(
+                homeTeam = obj.getString("home_team"),
+                awayTeam = obj.getString("away_team"),
+                homeScore = obj.getString("home_score"),
+                awayScore = obj.getString("away_score"),
+                homeIcon = obj.optString("home_icon", ""),
+                awayIcon = obj.optString("away_icon", ""),
+                status = obj.optString("status", ""),
+                sport = obj.optString("sport", ""),
+                detail = obj.optString("detail", ""),
+                homeExtra = obj.optString("home_extra", ""),
+                awayExtra = obj.optString("away_extra", "")
+            )
             "carousel" -> {
                 val items = obj.getJSONArray("items")
                 val parsed = (0 until items.length()).map { idx ->
