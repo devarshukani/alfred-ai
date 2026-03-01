@@ -20,27 +20,21 @@ TTS_DIR="$ASSETS/tts-model"
 ASR_DIR="$ASSETS/asr-model"
 
 # ---------------------------------------------------------------
-# 1. Native JNI libraries (shared by TTS + ASR)
+# 1. AAR (bundles native .so + Kotlin JNI wrappers)
 # ---------------------------------------------------------------
-echo "=== [1/4] Downloading sherpa-onnx v${SHERPA_VERSION} Android native libraries ==="
+echo "=== [1/4] Downloading sherpa-onnx v${SHERPA_VERSION} AAR ==="
 
-LIBS_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VERSION}/sherpa-onnx-v${SHERPA_VERSION}-android.tar.bz2"
-LIBS_ARCHIVE="sherpa-onnx-android.tar.bz2"
+AAR_NAME="sherpa-onnx-static-link-onnxruntime-${SHERPA_VERSION}.aar"
+AAR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VERSION}/${AAR_NAME}"
+AAR_DIR="app/libs"
 
-if [ ! -f "$LIBS_ARCHIVE" ]; then
-    wget -O "$LIBS_ARCHIVE" "$LIBS_URL"
+mkdir -p "$AAR_DIR"
+
+if [ ! -f "$AAR_DIR/$AAR_NAME" ]; then
+    wget -O "$AAR_DIR/$AAR_NAME" "$AAR_URL"
 fi
 
-echo "Extracting native libraries..."
-tar xjf "$LIBS_ARCHIVE"
-
-DEST="app/src/main/jniLibs"
-for ABI in arm64-v8a armeabi-v7a; do
-    mkdir -p "$DEST/$ABI"
-    cp jniLibs/$ABI/libsherpa-onnx-jni.so "$DEST/$ABI/"
-    cp jniLibs/$ABI/libonnxruntime.so "$DEST/$ABI/"
-    echo "  Copied $ABI libs"
-done
+echo "  AAR saved to $AAR_DIR/$AAR_NAME"
 
 # ---------------------------------------------------------------
 # 2. TTS model
@@ -108,7 +102,7 @@ echo "  VAD model saved to $VAD_DEST"
 echo ""
 echo "=== All done! ==="
 echo ""
-echo "  JNI libs:  app/src/main/jniLibs/"
+echo "  AAR:       $AAR_DIR/$AAR_NAME"
 echo "  TTS model: $TTS_DIR/"
 echo "  ASR model: $ASR_DIR/"
 echo "  VAD model: $VAD_DEST"
