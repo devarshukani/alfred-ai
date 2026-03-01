@@ -16,6 +16,7 @@ import com.alfredassistant.alfred_ai.speech.SpeechHelper
 import com.alfredassistant.alfred_ai.ui.AssistantState
 import com.alfredassistant.alfred_ai.ui.ConfirmationRequest
 import com.alfredassistant.alfred_ai.ui.OverlayAssistantScreen
+import com.alfredassistant.alfred_ai.ui.theme.AlfredaiTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -92,6 +93,7 @@ class OverlayAssistActivity : ComponentActivity() {
         }
 
         setContent {
+            AlfredaiTheme {
             var assistantState by remember { mutableStateOf(AssistantState.IDLE) }
             var currentConfirmation by remember { mutableStateOf<ConfirmationRequest?>(null) }
             var audioLevel by remember { mutableFloatStateOf(0f) }
@@ -185,6 +187,7 @@ class OverlayAssistActivity : ComponentActivity() {
                 },
                 onDismiss = { finish() }
             )
+            }
         }
     }
 }

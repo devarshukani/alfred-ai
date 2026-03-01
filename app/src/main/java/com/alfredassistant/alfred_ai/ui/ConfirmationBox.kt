@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alfredassistant.alfred_ai.ui.theme.*
 
-private val CardBg = Color(0xFF1C1D28)
+private val CardBg = Color(0xFF1E1E1E)
 private val CardBorder = Color.White.copy(alpha = 0.08f)
 private val PillShape = RoundedCornerShape(50)
 
