@@ -63,9 +63,12 @@
             android:name=".widget.CoverWaveActivity"
             android:exported="true"
             android:theme="@style/Theme.Alfredai.CoverWave"
+            android:launchMode="singleTask"
+            android:taskAffinity=".coverscreen"
             android:showOnLockScreen="true"
             android:showWhenLocked="true"
-            android:turnScreenOn="true" />
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true" />
 
         <!-- Flex Window Cover Widget -->
         <receiver

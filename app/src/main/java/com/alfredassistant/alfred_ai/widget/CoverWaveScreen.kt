@@ -22,16 +22,13 @@ import com.alfredassistant.alfred_ai.ui.theme.*
 import kotlin.math.*
 
 private const val TRANSITION_MS = 600
-private const val GRAD_STEPS = 48
+private const val GRAD_STEPS = 56
 
-/**
- * Smooth Gaussian radial gradient brush.
- */
 private fun smoothRadialBrush(
     center: Offset,
     radius: Float,
     peakColor: Color,
-    spread: Float = 0.50f,
+    spread: Float = 0.55f,
     steps: Int = GRAD_STEPS
 ): Brush {
     val stops = Array(steps) { i ->
@@ -42,11 +39,6 @@ private fun smoothRadialBrush(
     return Brush.radialGradient(colorStops = stops, center = center, radius = radius)
 }
 
-/**
- * Full-screen animated wave composable for the Flex Window cover screen.
- * The wave animation fills the entire display (not just a bottom bar).
- * Confirmation dialogs overlay on top.
- */
 @Composable
 fun CoverWaveScreen(
     state: AssistantState,
@@ -68,7 +60,6 @@ fun CoverWaveScreen(
                 if (state == AssistantState.IDLE) onDismiss()
             }
     ) {
-        // Full-screen wave canvas
         FullScreenWaveCanvas(
             state = state,
             audioLevel = audioLevel,
@@ -76,7 +67,6 @@ fun CoverWaveScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Confirmation box centered on cover screen
         ConfirmationBox(
             confirmation = confirmation,
             onOptionSelected = onOptionSelected,
@@ -102,24 +92,23 @@ private fun FullScreenWaveCanvas(
         label = "sA"
     )
 
-    // 7 drift phases for organic blob movement across the full screen
-    val drifts = (0 until 7).map { i ->
+    // 5 large blobs — fewer but much bigger for a cleaner look
+    val drifts = (0 until 5).map { i ->
         inf.animateFloat(
-            0f, 2f * PI.toFloat(),
+            -1f, 1f,
             infiniteRepeatable(
-                tween(3400 + i * 400, easing = LinearEasing),
-                RepeatMode.Restart
+                tween(5000 + i * 700, easing = EaseInOut),
+                RepeatMode.Reverse
             ),
             "d$i"
         ).value
     }
 
-    // Breathing pulses
-    val pulses = (0 until 7).map { i ->
+    val pulses = (0 until 5).map { i ->
         inf.animateFloat(
-            0.55f, 1.0f,
+            0.65f, 1.0f,
             infiniteRepeatable(
-                tween(1400 + i * 200, easing = EaseInOut),
+                tween(2000 + i * 300, easing = EaseInOut),
                 RepeatMode.Reverse
             ),
             "p$i"
@@ -129,52 +118,46 @@ private fun FullScreenWaveCanvas(
     val tw = tween<Float>(TRANSITION_MS, easing = EaseInOut)
     val ctw = tween<Color>(TRANSITION_MS, easing = EaseInOut)
 
-    // Glow radius — larger since we fill the whole screen
     val aGlowR by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.35f
-        AssistantState.LISTENING -> 0.45f
-        AssistantState.PROCESSING -> 0.40f
-        AssistantState.SPEAKING -> 0.55f
-        AssistantState.AWAITING_CONFIRMATION -> 0.38f
+        AssistantState.IDLE -> 1.2f
+        AssistantState.LISTENING -> 1.6f
+        AssistantState.PROCESSING -> 1.4f
+        AssistantState.SPEAKING -> 1.9f
+        AssistantState.AWAITING_CONFIRMATION -> 1.3f
     }, tw, label = "aGR")
 
-    // Drift amplitude
     val aDrift by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.08f
-        AssistantState.LISTENING -> 0.15f
-        AssistantState.PROCESSING -> 0.12f
-        AssistantState.SPEAKING -> 0.22f
-        AssistantState.AWAITING_CONFIRMATION -> 0.08f
+        AssistantState.IDLE -> 0.10f
+        AssistantState.LISTENING -> 0.18f
+        AssistantState.PROCESSING -> 0.14f
+        AssistantState.SPEAKING -> 0.25f
+        AssistantState.AWAITING_CONFIRMATION -> 0.10f
     }, tw, label = "aDf")
 
-    // Peak alpha
     val aGlowAlpha by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.40f
-        AssistantState.LISTENING -> 0.60f
-        AssistantState.PROCESSING -> 0.50f
-        AssistantState.SPEAKING -> 0.80f
-        AssistantState.AWAITING_CONFIRMATION -> 0.42f
+        AssistantState.IDLE -> 0.50f
+        AssistantState.LISTENING -> 0.70f
+        AssistantState.PROCESSING -> 0.60f
+        AssistantState.SPEAKING -> 0.90f
+        AssistantState.AWAITING_CONFIRMATION -> 0.52f
     }, tw, label = "aGA")
 
-    // Core brightness
     val aCoreAlpha by animateFloatAsState(when (state) {
-        AssistantState.IDLE -> 0.20f
-        AssistantState.LISTENING -> 0.45f
-        AssistantState.PROCESSING -> 0.35f
-        AssistantState.SPEAKING -> 0.65f
-        AssistantState.AWAITING_CONFIRMATION -> 0.25f
+        AssistantState.IDLE -> 0.25f
+        AssistantState.LISTENING -> 0.50f
+        AssistantState.PROCESSING -> 0.40f
+        AssistantState.SPEAKING -> 0.70f
+        AssistantState.AWAITING_CONFIRMATION -> 0.30f
     }, tw, label = "aCA")
 
-    // 7 colors per state — spread across the full screen
-    data class C7(val a: Color, val b: Color, val c: Color, val d: Color,
-                  val e: Color, val f: Color, val g: Color)
+    data class C5(val a: Color, val b: Color, val c: Color, val d: Color, val e: Color)
 
     val tc = when (state) {
-        AssistantState.IDLE -> C7(WaveBlue, WaveCyan, WavePurple, WaveBlue, WaveCyan, WavePurple, WaveBlue)
-        AssistantState.LISTENING -> C7(WaveBlue, WaveCyan, WaveGreen, WaveYellow, WaveBlue, WaveGreen, WaveCyan)
-        AssistantState.PROCESSING -> C7(WavePurple, WaveBlue, WavePink, WaveCyan, WavePurple, WaveBlue, WavePink)
-        AssistantState.SPEAKING -> C7(WaveOrange, WaveYellow, WaveRed, WavePink, WaveOrange, WaveYellow, WaveRed)
-        AssistantState.AWAITING_CONFIRMATION -> C7(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue)
+        AssistantState.IDLE -> C5(WaveBlue, WaveCyan, WavePurple, WaveBlue, WaveCyan)
+        AssistantState.LISTENING -> C5(WaveBlue, WaveCyan, WaveGreen, WaveYellow, WaveBlue)
+        AssistantState.PROCESSING -> C5(WavePurple, WaveBlue, WavePink, WaveCyan, WavePurple)
+        AssistantState.SPEAKING -> C5(WaveOrange, WaveYellow, WaveRed, WavePink, WaveOrange)
+        AssistantState.AWAITING_CONFIRMATION -> C5(WaveBlue, WaveCyan, AlfredGoldLight, WaveBlue, WaveCyan)
     }
     val colors = listOf(
         animateColorAsState(tc.a, ctw, label = "c0").value,
@@ -182,15 +165,15 @@ private fun FullScreenWaveCanvas(
         animateColorAsState(tc.c, ctw, label = "c2").value,
         animateColorAsState(tc.d, ctw, label = "c3").value,
         animateColorAsState(tc.e, ctw, label = "c4").value,
-        animateColorAsState(tc.f, ctw, label = "c5").value,
-        animateColorAsState(tc.g, ctw, label = "c6").value,
     )
 
-    // Blob positions spread across the full screen
+    // 5 blobs spread wide — anchored at edges and center for full coverage
     val blobPositions = listOf(
-        0.20f to 0.15f, 0.75f to 0.25f, 0.40f to 0.50f,
-        0.15f to 0.75f, 0.80f to 0.70f, 0.55f to 0.85f,
-        0.50f to 0.35f
+        0.15f to 0.20f,
+        0.85f to 0.25f,
+        0.50f to 0.50f,
+        0.20f to 0.80f,
+        0.80f to 0.75f,
     )
 
     val audioBoost = 1f + smoothAudio * 0.5f
@@ -207,45 +190,59 @@ private fun FullScreenWaveCanvas(
         val h = size.height
         val diag = hypot(w, h)
 
-        // Draw 7 large radial glow blobs spread across the full screen
-        for (i in 0 until 7) {
+        for (i in 0 until 5) {
             val (bx, by) = blobPositions[i]
-            val d = drifts[i]
             val p = pulses[i]
             val col = colors[i]
 
-            val cx = bx * w + sin(d.toDouble()).toFloat() * w * aDrift
-            val cy = by * h + cos(d.toDouble() * 0.7).toFloat() * h * aDrift
+            val cx = bx * w + drifts[i] * w * aDrift
+            val cy = by * h + drifts[(i + 2) % 5] * h * aDrift
             val r = diag * aGlowR * p * audioBoost * 0.5f
 
-            val alpha = (aGlowAlpha * p * audioAlphaBoost).coerceAtMost(0.85f)
+            val alpha = (aGlowAlpha * p * audioAlphaBoost).coerceAtMost(0.90f)
 
             drawCircle(
                 brush = smoothRadialBrush(
                     center = Offset(cx, cy),
-                    radius = r * 2f,
+                    radius = r,
                     peakColor = col.copy(alpha = alpha),
-                    spread = 0.55f
+                    spread = 0.60f
                 ),
-                radius = r * 2f,
+                radius = r,
                 center = Offset(cx, cy)
             )
         }
 
-        // Central core glow
-        val corePulse = pulses[0]
-        val coreR = diag * 0.25f * corePulse * audioBoost
+        // Large soft core glow at center
+        val corePulse = pulses[2]
+        val coreR = diag * 0.8f * corePulse * audioBoost
         val coreAlpha = (aCoreAlpha * corePulse * audioAlphaBoost).coerceAtMost(0.80f)
-        val coreColor = lerp(Color.White, colors[0], 0.3f).copy(alpha = coreAlpha)
+        val coreColor = lerp(Color.White, colors[0], 0.25f).copy(alpha = coreAlpha)
 
         drawCircle(
             brush = smoothRadialBrush(
                 center = Offset(w * 0.5f, h * 0.5f),
                 radius = coreR,
                 peakColor = coreColor,
-                spread = 0.45f
+                spread = 0.50f
             ),
             radius = coreR,
+            center = Offset(w * 0.5f, h * 0.5f)
+        )
+
+        // Secondary outer halo for extra depth
+        val haloR = diag * 1.1f * pulses[0] * audioBoost
+        val haloColor = lerp(Color.White, colors[1], 0.4f)
+            .copy(alpha = (coreAlpha * 0.3f).coerceAtMost(0.35f))
+
+        drawCircle(
+            brush = smoothRadialBrush(
+                center = Offset(w * 0.5f, h * 0.5f),
+                radius = haloR,
+                peakColor = haloColor,
+                spread = 0.65f
+            ),
+            radius = haloR,
             center = Offset(w * 0.5f, h * 0.5f)
         )
     }
