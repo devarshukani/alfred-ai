@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,11 +22,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alfredassistant.alfred_ai.ui.theme.*
+import compose.icons.TablerIcons
+import compose.icons.tablericons.Calendar
+import compose.icons.tablericons.MapPin
+import compose.icons.tablericons.Message
+import compose.icons.tablericons.Microphone
+import compose.icons.tablericons.Phone
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.exp
@@ -39,7 +47,7 @@ data class OnboardingStep(
     val description: String,
     val permissions: List<String>,
     val accentColor: Color,
-    val icon: String,       // emoji for simplicity
+    val icon: ImageVector,
     val optional: Boolean = false
 )
 
@@ -49,35 +57,35 @@ val onboardingSteps = listOf(
         description = "Alfred listens and speaks.\nGrant microphone access to have a natural conversation.",
         permissions = listOf(Manifest.permission.RECORD_AUDIO),
         accentColor = WaveBlue,
-        icon = "🎙️"
+        icon = TablerIcons.Microphone
     ),
     OnboardingStep(
         title = "Phone & Contacts",
         description = "Make calls and find contacts hands-free.\nAlfred can dial anyone in your phonebook.",
         permissions = listOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE),
         accentColor = WaveGreen,
-        icon = "📞"
+        icon = TablerIcons.Phone
     ),
     OnboardingStep(
         title = "Calendar",
         description = "Schedule events and check your agenda.\nAlfred manages your calendar by voice.",
         permissions = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR),
         accentColor = WaveYellow,
-        icon = "📅"
+        icon = TablerIcons.Calendar
     ),
     OnboardingStep(
         title = "Messages",
         description = "Send texts without touching your phone.\nJust tell Alfred who and what.",
         permissions = listOf(Manifest.permission.SEND_SMS),
         accentColor = WavePurple,
-        icon = "💬"
+        icon = TablerIcons.Message
     ),
     OnboardingStep(
         title = "Location",
         description = "Weather, directions, and local info.\nAlfred uses your location to stay relevant.",
         permissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION),
         accentColor = WaveCyan,
-        icon = "📍",
+        icon = TablerIcons.MapPin,
         optional = true
     )
 )
@@ -279,7 +287,7 @@ private fun AnimatedGlow(color: Color) {
 // ── Animated icon with pulse ring ──
 
 @Composable
-private fun AnimatedIcon(icon: String, color: Color, key: Int) {
+private fun AnimatedIcon(icon: ImageVector, color: Color, key: Int) {
     val inf = rememberInfiniteTransition(label = "iconPulse")
     val ringScale by inf.animateFloat(
         1f, 1.5f,
@@ -336,10 +344,11 @@ private fun AnimatedIcon(icon: String, color: Color, key: Int) {
                 .clip(CircleShape)
                 .background(animColor.copy(alpha = 0.12f))
         ) {
-            Text(
-                text = icon,
-                fontSize = 44.sp,
-                textAlign = TextAlign.Center
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = animColor,
+                modifier = Modifier.size(44.dp)
             )
         }
     }

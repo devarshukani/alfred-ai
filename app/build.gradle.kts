@@ -102,6 +102,9 @@ dependencies {
     // ONNX Runtime for on-device embedding model
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
 
+    // Tabler Icons for Compose
+    implementation("br.com.devsrsouza.compose.icons:tabler-icons:1.1.1")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
