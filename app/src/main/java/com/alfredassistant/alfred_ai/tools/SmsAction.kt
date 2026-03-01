@@ -1,9 +1,11 @@
-package com.alfredassistant.alfred_ai.features.sms
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.telephony.SmsManager
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 
 /**
  * Send SMS messages and open messaging apps.
@@ -52,4 +54,26 @@ class SmsAction(private val context: Context) {
             "Could not open messaging app: ${e.message}"
         }
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "send_sms",
+            description = "Send an SMS text message directly to a phone number. Requires confirmation via present_options first.",
+            parameters = listOf(
+                Param(name = "phone_number", type = "string", description = "The recipient's phone number"),
+                Param(name = "message", type = "string", description = "The text message to send")
+            ),
+            required = listOf("phone_number", "message")
+        ) { args -> sendSms(args.getString("phone_number"), args.getString("message")) },
+
+        ToolDef(
+            name = "open_sms_app",
+            description = "Open the default messaging app with a phone number and optional pre-filled message.",
+            parameters = listOf(
+                Param(name = "phone_number", type = "string", description = "The recipient's phone number"),
+                Param(name = "message", type = "string", description = "Optional pre-filled message text")
+            ),
+            required = listOf("phone_number")
+        ) { args -> openSmsApp(args.getString("phone_number"), args.optString("message", null)) }
+    )
 }

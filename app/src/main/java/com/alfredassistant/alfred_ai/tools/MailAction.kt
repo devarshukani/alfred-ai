@@ -1,8 +1,10 @@
-package com.alfredassistant.alfred_ai.features.mail
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 
 /**
  * Mail actions using Android intents.
@@ -77,4 +79,33 @@ class MailAction(private val context: Context) {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         })
     }
+
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "compose_email",
+            description = "Compose and open an email in the user's mail app. The user will review and send it manually.",
+            parameters = listOf(
+                Param(name = "to", type = "string", description = "Recipient email(s), comma-separated"),
+                Param(name = "subject", type = "string", description = "Email subject line"),
+                Param(name = "body", type = "string", description = "Email body text"),
+                Param(name = "cc", type = "string", description = "Optional CC recipients"),
+                Param(name = "bcc", type = "string", description = "Optional BCC recipients")
+            ),
+            required = listOf("to", "subject", "body")
+        ) { args ->
+            composeEmail(args.getString("to"), args.getString("subject"), args.getString("body"),
+                args.optString("cc", null), args.optString("bcc", null))
+            "Email composed. Please review and send."
+        },
+        ToolDef(name = "open_mail", description = "Open the user's default email app to check inbox.") { _ -> openMail(); "Mail opened." },
+        ToolDef(
+            name = "share_via_email",
+            description = "Share content via email using the system share sheet.",
+            parameters = listOf(
+                Param(name = "subject", type = "string", description = "Email subject"),
+                Param(name = "body", type = "string", description = "Content to share")
+            ),
+            required = listOf("subject", "body")
+        ) { args -> shareViaEmail(args.getString("subject"), args.getString("body")); "Share sheet opened." }
+    )
 }

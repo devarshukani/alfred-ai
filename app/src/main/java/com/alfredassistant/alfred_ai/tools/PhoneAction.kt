@@ -1,10 +1,12 @@
-package com.alfredassistant.alfred_ai.features.phone
+package com.alfredassistant.alfred_ai.tools
 
 import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
 import android.provider.ContactsContract
+import com.alfredassistant.alfred_ai.skills.Param
+import com.alfredassistant.alfred_ai.skills.ToolDef
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -298,6 +300,36 @@ class PhoneAction(private val context: Context) {
         }
         context.startActivity(intent)
     }
+
+    /** ToolDef definitions for this action — importable by any skill. */
+    fun toolDefs(): List<ToolDef> = listOf(
+        ToolDef(
+            name = "search_contacts",
+            description = "Search contacts by name with fuzzy matching. Handles voice transcription errors. If only one contact is found, use it directly without asking for confirmation.",
+            parameters = listOf(Param(name = "query", type = "string", description = "The name or partial name to search for in contacts")),
+            required = listOf("query")
+        ) { args ->
+            val q = args.getString("query")
+            val contacts = searchContacts(q)
+            if (contacts.isEmpty()) "No contacts found matching \"$q\"."
+            else if (contacts.size == 1) "Found: ${contacts.toJsonString()}"
+            else contacts.toJsonString()
+        },
+
+        ToolDef(
+            name = "make_call",
+            description = "Make a phone call to a specific phone number. Use this after confirming the number with the user.",
+            parameters = listOf(Param(name = "phone_number", type = "string", description = "The phone number to call")),
+            required = listOf("phone_number")
+        ) { args -> makeCall(args.getString("phone_number")); "Call initiated." },
+
+        ToolDef(
+            name = "dial_number",
+            description = "Open the phone dialer with a number pre-filled without auto-calling.",
+            parameters = listOf(Param(name = "phone_number", type = "string", description = "The phone number to dial")),
+            required = listOf("phone_number")
+        ) { args -> dialNumber(args.getString("phone_number")); "Dialer opened." }
+    )
 }
 
 /**
