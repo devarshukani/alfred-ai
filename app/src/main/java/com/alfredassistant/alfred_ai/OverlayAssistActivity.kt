@@ -206,7 +206,19 @@ class OverlayAssistActivity : ComponentActivity() {
                     this@OverlayAssistActivity, Manifest.permission.RECORD_AUDIO
                 ) == PackageManager.PERMISSION_GRANTED
             ) {
-                android.os.Handler(mainLooper).postDelayed({ speechHelper.startListening() }, 300)
+                val isOnboardingChat = intent?.getBooleanExtra("onboarding_chat", false) == true
+                if (isOnboardingChat) {
+                    // First launch: short intro + ask name and what they do
+                    scope.launch {
+                        assistantState = AssistantState.PROCESSING
+                        val response = brain.processInput(
+                            "Hi! I just set you up. Introduce yourself in one sentence, then ask me just my name and what I do."
+                        )
+                        speechHelper.speak(response)
+                    }
+                } else {
+                    android.os.Handler(mainLooper).postDelayed({ speechHelper.startListening() }, 300)
+                }
             }
 
             onDispose { speechHelper.shutdown() }
