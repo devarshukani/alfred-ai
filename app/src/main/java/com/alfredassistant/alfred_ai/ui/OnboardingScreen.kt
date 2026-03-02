@@ -279,7 +279,7 @@ private fun ModelDownloadPage(onFinish: () -> Unit) {
 
     var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Ready) }
     var currentStep by remember { mutableIntStateOf(0) }
-    var totalSteps by remember { mutableIntStateOf(5) }
+    var totalSteps by remember { mutableIntStateOf(3) }
     var currentLabel by remember { mutableStateOf("") }
     var bytesDownloaded by remember { mutableLongStateOf(0L) }
     var errorMessage by remember { mutableStateOf<String?>(null) }

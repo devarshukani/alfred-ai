@@ -186,7 +186,37 @@ object ModelDownloader {
     }
 
     /**
-     * Download a file using Android DownloadManager for speed and resume support.
+     * Resolve redirects (302s from GitHub/HuggingFace) to get the final direct URL.
+     * DownloadManager doesn't always follow redirects reliably on all OEMs.
+     */
+    private fun resolveRedirects(url: String): String {
+        var currentUrl = url
+        var redirects = 0
+        while (redirects < 8) {
+            val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 15_000
+                readTimeout = 15_000
+                requestMethod = "HEAD"
+                setRequestProperty("User-Agent", "Alfred-AI/1.0")
+            }
+            val code = conn.responseCode
+            val location = conn.getHeaderField("Location")
+            conn.disconnect()
+            if (code in 301..303 || code == 307 || code == 308) {
+                currentUrl = location ?: break
+                redirects++
+            } else {
+                break
+            }
+        }
+        return currentUrl
+    }
+
+    /**
+     * Download a file using Android DownloadManager with redirect pre-resolution.
+     * We resolve 302 chains first (GitHub releases, HuggingFace CDN) because
+     * DownloadManager can silently stall on some redirect chains depending on OEM.
      */
     private suspend fun downloadWithManager(
         dm: DownloadManager, url: String, dest: File, label: String,
@@ -196,7 +226,11 @@ object ModelDownloader {
         tmpFile.delete()
         dest.parentFile?.mkdirs()
 
-        val request = DownloadManager.Request(Uri.parse(url))
+        // Resolve redirects so DownloadManager gets a direct CDN URL
+        val directUrl = try { resolveRedirects(url) } catch (_: Exception) { url }
+        Log.d(TAG, "Resolved $label URL: $directUrl")
+
+        val request = DownloadManager.Request(Uri.parse(directUrl))
             .setTitle("Alfred: $label")
             .setDescription("Downloading AI model")
             .setDestinationUri(Uri.fromFile(tmpFile))
@@ -208,6 +242,9 @@ object ModelDownloader {
         try {
             val query = DownloadManager.Query().setFilterById(downloadId)
             var complete = false
+            var stallCount = 0
+            var lastBytes = -1L
+
             while (!complete) {
                 dm.query(query).use { cursor ->
                     if (!cursor.moveToFirst()) return@use
@@ -215,19 +252,37 @@ object ModelDownloader {
                     val bytesIdx = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
                     val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
 
+                    val currentBytes = if (bytesIdx >= 0) cursor.getLong(bytesIdx) else 0L
+
                     when (cursor.getInt(statusIdx)) {
                         DownloadManager.STATUS_SUCCESSFUL -> {
-                            if (bytesIdx >= 0) onBytes(cursor.getLong(bytesIdx))
+                            onBytes(currentBytes)
                             complete = true
                         }
                         DownloadManager.STATUS_FAILED -> {
                             val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else -1
                             throw Exception("Download failed (reason=$reason) for $url")
                         }
-                        DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING -> {
-                            if (bytesIdx >= 0) onBytes(cursor.getLong(bytesIdx))
+                        DownloadManager.STATUS_RUNNING -> {
+                            onBytes(currentBytes)
+                            // Detect stall: bytes haven't changed for ~30s (60 polls × 500ms)
+                            if (currentBytes == lastBytes) stallCount++ else stallCount = 0
+                            lastBytes = currentBytes
+                            if (stallCount > 60) {
+                                throw Exception("Download stalled at $currentBytes bytes for $url")
+                            }
                         }
-                        DownloadManager.STATUS_PAUSED -> { /* wait */ }
+                        DownloadManager.STATUS_PENDING -> {
+                            // Detect stuck pending: hasn't started for ~30s
+                            stallCount++
+                            if (stallCount > 60) {
+                                throw Exception("Download stuck in PENDING state for $url")
+                            }
+                        }
+                        DownloadManager.STATUS_PAUSED -> {
+                            val reason = if (reasonIdx >= 0) cursor.getInt(reasonIdx) else -1
+                            Log.w(TAG, "Download paused (reason=$reason) for $label")
+                        }
                     }
                 }
                 if (!complete) delay(500)
